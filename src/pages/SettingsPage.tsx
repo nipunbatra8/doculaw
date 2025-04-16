@@ -254,37 +254,6 @@ const SettingsPage = () => {
                 <div className="space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="flex items-center">
-                        <Lock className="h-5 w-5 mr-2 text-doculaw-500" />
-                        Security Settings
-                      </CardTitle>
-                      <CardDescription>
-                        Manage your password and account security
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-1">
-                        <Label htmlFor="current-password">Current Password</Label>
-                        <Input id="current-password" type="password" placeholder="••••••••" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="new-password">New Password</Label>
-                        <Input id="new-password" type="password" placeholder="••••••••" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="confirm-password">Confirm New Password</Label>
-                        <Input id="confirm-password" type="password" placeholder="••••••••" />
-                      </div>
-                    </CardContent>
-                    <CardFooter>
-                      <Button className="bg-doculaw-500 hover:bg-doculaw-600">
-                        Update Password
-                      </Button>
-                    </CardFooter>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
                       <CardTitle className="text-red-600 flex items-center">
                         <LogOut className="h-5 w-5 mr-2" />
                         Account Actions
