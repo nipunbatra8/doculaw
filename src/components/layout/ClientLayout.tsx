@@ -23,7 +23,7 @@ const ClientLayout = ({ children }: ClientLayoutProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
       {/* Mobile sidebar toggle */}
       <div className="lg:hidden fixed top-0 left-0 right-0 bg-white z-40 flex items-center justify-between p-4 border-b">
         <div className="flex items-center">
@@ -109,10 +109,7 @@ const ClientLayout = ({ children }: ClientLayoutProps) => {
       </div>
 
       {/* Main content */}
-      <div className={cn(
-        "transition-all duration-300 ease-in-out",
-        "lg:ml-64 flex-1 min-h-screen pt-16 lg:pt-0"
-      )}>
+      <div className="flex-1 min-h-screen pt-16 lg:pt-0 transition-all duration-300 ease-in-out">
         <main className="p-6">{children}</main>
       </div>
     </div>
