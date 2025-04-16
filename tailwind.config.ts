@@ -52,6 +52,19 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+                doculaw: {
+                    50: '#f0faf7',
+                    100: '#d9f2ea',
+                    200: '#b6e5d7',
+                    300: '#83d1be', // Logo color
+                    400: '#4db798',
+                    500: '#399b83',
+                    600: '#2b7f6c',
+                    700: '#266659',
+                    800: '#225249',
+                    900: '#1e443e',
+                    950: '#0f2926',
+                },
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
