@@ -22,14 +22,6 @@ const ClientLayout = ({ children }: ClientLayoutProps) => {
     navigate("/login");
   };
 
-  // Get initials from email if no name is available
-  const getInitials = () => {
-    if (user?.email) {
-      return user.email.charAt(0).toUpperCase();
-    }
-    return "C";
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
       {/* Mobile sidebar toggle */}
@@ -68,11 +60,11 @@ const ClientLayout = ({ children }: ClientLayoutProps) => {
               <Avatar>
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-doculaw-300 text-white">
-                  {getInitials()}
+                  {user?.name?.charAt(0) || "C"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-medium text-sm">Client</p>
+                <p className="font-medium text-sm">{user?.name || "Client Name"}</p>
                 <p className="text-xs text-gray-500">{user?.email || "client@example.com"}</p>
               </div>
             </div>

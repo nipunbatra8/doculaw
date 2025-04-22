@@ -60,7 +60,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/toast";
 
 const teamMembers = [
   { id: "1", name: "John Doe", email: "john.doe@example.com", role: "Admin", status: "Active", joinedDate: "Jan 2023" },

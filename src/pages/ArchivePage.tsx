@@ -11,7 +11,6 @@ import ArchiveFilters from "@/components/filters/ArchiveFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { format, parseISO, isAfter, isBefore, isValid } from "date-fns";
-import CalendlyEmbed from "@/components/CalendlyEmbed";
 
 interface Case {
   id: string;
@@ -24,20 +23,16 @@ interface Case {
   archived_at: string;
 }
 
-type DateRange = {
-  from?: Date;
-  to?: Date;
-};
-
 const ArchivePage = () => {
   const { user } = useAuth();
   const [cases, setCases] = useState<Case[]>([]);
   const [filteredCases, setFilteredCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeFilters, setActiveFilters] = useState({
-    status: null as string | null,
-    date: null as DateRange | null,
-    query: null as string | null,
+  const [filters, setFilters] = useState({
+    search: "",
+    caseType: "all",
+    dateFrom: null as Date | null,
+    dateTo: null as Date | null,
   });
 
   useEffect(() => {
@@ -48,7 +43,7 @@ const ArchivePage = () => {
 
   useEffect(() => {
     filterCases();
-  }, [cases, activeFilters]);
+  }, [cases, filters]);
 
   const fetchArchivedCases = async () => {
     setIsLoading(true);
@@ -76,8 +71,8 @@ const ArchivePage = () => {
     let filtered = [...cases];
 
     // Filter by search term
-    if (activeFilters.query) {
-      const searchLower = activeFilters.query.toLowerCase();
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(
         (c) =>
           c.name.toLowerCase().includes(searchLower) ||
@@ -86,34 +81,42 @@ const ArchivePage = () => {
       );
     }
 
-    // Filter by status
-    if (activeFilters.status) {
-      filtered = filtered.filter((c) => c.status === activeFilters.status);
+    // Filter by case type
+    if (filters.caseType !== "all") {
+      filtered = filtered.filter((c) => c.case_type === filters.caseType);
     }
 
     // Filter by date range
-    if (activeFilters.date?.from && isValid(activeFilters.date.from)) {
+    if (filters.dateFrom && isValid(filters.dateFrom)) {
       filtered = filtered.filter((c) => {
         const archivedDate = parseISO(c.archived_at);
-        return isAfter(archivedDate, activeFilters.date?.from as Date) || archivedDate.getTime() === (activeFilters.date?.from as Date).getTime();
+        return isAfter(archivedDate, filters.dateFrom as Date) || archivedDate.getTime() === (filters.dateFrom as Date).getTime();
       });
     }
 
-    if (activeFilters.date?.to && isValid(activeFilters.date.to)) {
+    if (filters.dateTo && isValid(filters.dateTo)) {
       filtered = filtered.filter((c) => {
         const archivedDate = parseISO(c.archived_at);
-        return isBefore(archivedDate, activeFilters.date?.to as Date) || archivedDate.getTime() === (activeFilters.date?.to as Date).getTime();
+        return isBefore(archivedDate, filters.dateTo as Date) || archivedDate.getTime() === (filters.dateTo as Date).getTime();
       });
     }
 
     setFilteredCases(filtered);
   };
 
-  const handleFilter = (status: string | null, date: DateRange | null, query: string | null) => {
-    setActiveFilters({
-      status,
-      date,
-      query
+  const handleSearch = (query: string) => {
+    setFilters({ ...filters, search: query });
+  };
+
+  const handleFilterChange = (type: string, value: string) => {
+    setFilters({ ...filters, [type]: value });
+  };
+
+  const handleDateChange = (dates: { from?: Date; to?: Date }) => {
+    setFilters({
+      ...filters,
+      dateFrom: dates.from || null,
+      dateTo: dates.to || null,
     });
   };
 
@@ -126,12 +129,16 @@ const ArchivePage = () => {
             <p className="text-gray-600 mt-1">View and manage your archived cases</p>
           </div>
           <Button className="bg-doculaw-500 hover:bg-doculaw-600">
-            <CalendlyEmbed url="https://calendly.com/nipunbatra8/30min?hide_gdpr_banner=1&background_color=F3F4F6&text_color=000000&primary_color=5bb5a2" />
+            <Calendar className="mr-2 h-4 w-4" />
             Book a Demo
           </Button>
         </div>
 
-        <ArchiveFilters onFilter={handleFilter} />
+        <ArchiveFilters
+          onSearch={handleSearch}
+          onFilterChange={handleFilterChange}
+          onDateChange={handleDateChange}
+        />
 
         <Card>
           <CardHeader className="pb-2">
