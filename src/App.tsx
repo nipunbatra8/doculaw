@@ -17,6 +17,7 @@ import DiscoveryRequestPage from "./pages/DiscoveryRequestPage";
 import DiscoveryResponsePage from "./pages/DiscoveryResponsePage";
 import ClientDashboardPage from "./pages/ClientDashboardPage";
 import NotFound from "./pages/NotFound";
+import PaymentPage from "./pages/PaymentPage"; // new
 
 // Auth provider
 import { AuthProvider } from "./context/AuthContext";
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/payment" element={<PaymentPage />} />
             
             {/* Protected routes for lawyers */}
             <Route path="/dashboard" element={<DashboardPage />} />

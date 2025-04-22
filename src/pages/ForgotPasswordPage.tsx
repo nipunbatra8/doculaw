@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState("");
@@ -17,24 +18,23 @@ const ForgotPasswordPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    try {
-      // In a real app, this would call an API endpoint
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + "/login",
+    });
+    setIsSubmitting(false);
+
+    if (!error) {
       setIsSubmitted(true);
       toast({
         title: "Reset email sent",
         description: "Check your inbox for instructions to reset your password",
       });
-    } catch (error) {
+    } else {
       toast({
         title: "An error occurred",
-        description: "We couldn't send the reset email. Please try again.",
+        description: error.message || "We couldn't send the reset email. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
