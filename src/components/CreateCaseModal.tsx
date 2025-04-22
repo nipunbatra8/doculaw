@@ -43,10 +43,12 @@ const caseTypes = [
 
 const CreateCaseModal = ({ 
   isOpen, 
-  onOpenChange 
+  onOpenChange,
+  onCaseCreated
 }: { 
   isOpen: boolean, 
-  onOpenChange: (open: boolean) => void 
+  onOpenChange: (open: boolean) => void,
+  onCaseCreated?: () => void
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -69,7 +71,7 @@ const CreateCaseModal = ({
           name: data.name,
           client: data.client,
           case_type: data.caseType,
-          status: data.status || 'active',
+          status: data.status || 'Active',
           user_id: user.id
         })
         .select()
@@ -84,6 +86,11 @@ const CreateCaseModal = ({
 
       reset();
       onOpenChange(false);
+      
+      // Call the callback function if provided
+      if (onCaseCreated) {
+        onCaseCreated();
+      }
     } catch (error) {
       console.error('Error creating case:', error);
       toast({
@@ -122,7 +129,7 @@ const CreateCaseModal = ({
           </div>
           
           <div>
-            <Select {...register('caseType')}>
+            <Select onValueChange={(value) => register('caseType').onChange({ target: { value } })}>
               <SelectTrigger>
                 <SelectValue placeholder="Select Case Type" />
               </SelectTrigger>
@@ -137,14 +144,17 @@ const CreateCaseModal = ({
           </div>
           
           <div>
-            <Select {...register('status')} defaultValue="active">
+            <Select 
+              defaultValue="Active"
+              onValueChange={(value) => register('status').onChange({ target: { value } })}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select Case Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Pending">Pending</SelectItem>
+                <SelectItem value="Inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
           </div>

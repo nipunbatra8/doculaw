@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,111 +46,40 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { format, parseISO } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
-// Mock data for cases
-const casesData = [
-  { 
-    id: "1", 
-    name: "Smith v. Johnson", 
-    client: "John Smith", 
-    type: "Personal Injury", 
-    status: "Active", 
-    lastActivity: "Today",
-    filedDate: "Jun 15, 2023",
-    court: "County Court",
-    caseNumber: "CV-2023-12345"
-  },
-  { 
-    id: "2", 
-    name: "Davidson LLC v. Metro Corp", 
-    client: "Davidson LLC", 
-    type: "Business Dispute", 
-    status: "Active", 
-    lastActivity: "Yesterday",
-    filedDate: "Apr 22, 2023",
-    court: "District Court",
-    caseNumber: "CV-2023-87654"
-  },
-  { 
-    id: "3", 
-    name: "Thompson Divorce", 
-    client: "Sarah Thompson", 
-    type: "Family Law", 
-    status: "Pending", 
-    lastActivity: "2 days ago",
-    filedDate: "Jul 10, 2023",
-    court: "Family Court",
-    caseNumber: "FL-2023-56789"
-  },
-  { 
-    id: "4", 
-    name: "Williams Estate", 
-    client: "Williams Family", 
-    type: "Estate Planning", 
-    status: "Active", 
-    lastActivity: "3 days ago",
-    filedDate: "Mar 5, 2023",
-    court: "Probate Court",
-    caseNumber: "PR-2023-43210"
-  },
-  { 
-    id: "5", 
-    name: "Martinez v. City", 
-    client: "Elena Martinez", 
-    type: "Civil Rights", 
-    status: "Active", 
-    lastActivity: "1 week ago",
-    filedDate: "Feb 18, 2023",
-    court: "Federal Court",
-    caseNumber: "CV-2023-76543"
-  },
-  { 
-    id: "6", 
-    name: "Roberts Bankruptcy", 
-    client: "Tom Roberts", 
-    type: "Bankruptcy", 
-    status: "Pending", 
-    lastActivity: "2 weeks ago",
-    filedDate: "May 30, 2023",
-    court: "Bankruptcy Court",
-    caseNumber: "BK-2023-98765"
-  },
-  { 
-    id: "7", 
-    name: "Anderson LLC Tax Appeal", 
-    client: "Anderson LLC", 
-    type: "Tax Law", 
-    status: "Active", 
-    lastActivity: "3 weeks ago",
-    filedDate: "Jan 12, 2023",
-    court: "Tax Court",
-    caseNumber: "TX-2023-24680"
-  },
-  { 
-    id: "8", 
-    name: "Garcia Immigration", 
-    client: "Carlos Garcia", 
-    type: "Immigration", 
-    status: "Inactive", 
-    lastActivity: "1 month ago",
-    filedDate: "Nov 8, 2022",
-    court: "Immigration Court",
-    caseNumber: "IM-2022-13579"
-  },
-];
+// Type for case data from Supabase
+type CaseData = {
+  id: string;
+  name: string;
+  client: string | null;
+  case_type: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  archived_at: string | null;
+  // Additional fields we'll create for UI display
+  lastActivity?: string;
+  caseNumber?: string;
+  court?: string;
+  filedDate?: string;
+};
 
 const CasesPage = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [isCreateCaseModalOpen, setIsCreateCaseModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [caseDetailsOpen, setCaseDetailsOpen] = useState(false);
-  const [selectedCase, setSelectedCase] = useState<any>(null);
+  const [selectedCase, setSelectedCase] = useState<CaseData | null>(null);
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Fetch cases for the logged-in user
-  const { data: casesData = [], isLoading, error } = useQuery({
+  const { data: casesData = [], isLoading, error, refetch } = useQuery({
     queryKey: ['cases', user?.id, activeTab, searchQuery],
     queryFn: async () => {
       if (!user) return [];
@@ -161,7 +91,7 @@ const CasesPage = () => {
       
       // Apply tab filter
       if (activeTab !== 'all') {
-        query = query.eq('status', activeTab);
+        query = query.eq('status', activeTab.charAt(0).toUpperCase() + activeTab.slice(1));
       }
       
       // Apply search query
@@ -174,35 +104,85 @@ const CasesPage = () => {
       const { data, error } = await query;
       
       if (error) throw error;
-      return data;
+      
+      // Enhance data with additional UI fields
+      return data.map((caseItem: CaseData) => ({
+        ...caseItem,
+        lastActivity: formatRelativeTime(caseItem.updated_at),
+        caseNumber: `CV-${new Date(caseItem.created_at).getFullYear()}-${caseItem.id.substring(0, 5)}`,
+        court: getCourt(caseItem.case_type),
+        filedDate: format(parseISO(caseItem.created_at), 'MMM d, yyyy')
+      }));
     },
     enabled: !!user
   });
 
-  // Filter cases based on search query and active tab
-  const filteredCases = casesData.filter(caseItem => {
-    const matchesSearch = 
-      caseItem.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      caseItem.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      caseItem.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      caseItem.caseNumber.toLowerCase().includes(searchQuery.toLowerCase());
+  // Utility function to determine court based on case type
+  const getCourt = (caseType: string | null): string => {
+    if (!caseType) return "County Court";
     
-    if (activeTab === "all") return matchesSearch;
-    if (activeTab === "active") return matchesSearch && caseItem.status === "Active";
-    if (activeTab === "pending") return matchesSearch && caseItem.status === "Pending";
-    if (activeTab === "inactive") return matchesSearch && caseItem.status === "Inactive";
-    
-    return matchesSearch;
-  });
+    switch(caseType) {
+      case "Family Law": return "Family Court";
+      case "Estate Planning": return "Probate Court";
+      case "Business Dispute": return "District Court";
+      case "Civil Rights": return "Federal Court";
+      case "Tax Law": return "Tax Court";
+      case "Immigration": return "Immigration Court";
+      case "Bankruptcy": return "Bankruptcy Court";
+      default: return "County Court";
+    }
+  };
 
-  const handleCaseClick = (caseItem: any) => {
+  // Utility function to format relative time
+  const formatRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffInDays === 0) return "Today";
+    if (diffInDays === 1) return "Yesterday";
+    if (diffInDays < 7) return `${diffInDays} days ago`;
+    if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
+    return format(date, 'MMM d, yyyy');
+  };
+
+  const handleCaseClick = (caseItem: CaseData) => {
     setSelectedCase(caseItem);
     setCaseDetailsOpen(true);
   };
 
-  const handleActionClick = (caseItem: any) => {
+  const handleActionClick = (caseItem: CaseData) => {
     setSelectedCase(caseItem);
     setActionModalOpen(true);
+  };
+
+  const handleDeleteCase = async () => {
+    if (!selectedCase) return;
+    
+    try {
+      const { error } = await supabase
+        .from('cases')
+        .delete()
+        .eq('id', selectedCase.id);
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Case Deleted",
+        description: "The case has been permanently deleted.",
+      });
+      
+      setDeleteConfirmOpen(false);
+      setCaseDetailsOpen(false);
+      refetch();
+    } catch (error) {
+      console.error('Error deleting case:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete the case. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -264,11 +244,11 @@ const CasesPage = () => {
                     </TableCell>
                   </TableRow>
                 ) : casesData.length > 0 ? (
-                  casesData.map((caseItem) => (
+                  casesData.map((caseItem: CaseData) => (
                     <TableRow key={caseItem.id} className="cursor-pointer hover:bg-gray-50" onClick={() => handleCaseClick(caseItem)}>
                       <TableCell className="font-medium">{caseItem.name}</TableCell>
                       <TableCell>{caseItem.client}</TableCell>
-                      <TableCell className="hidden md:table-cell">{caseItem.type}</TableCell>
+                      <TableCell className="hidden md:table-cell">{caseItem.case_type}</TableCell>
                       <TableCell className="hidden md:table-cell">{caseItem.caseNumber}</TableCell>
                       <TableCell>
                         <Badge variant={
@@ -384,7 +364,7 @@ const CasesPage = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Type:</span>
-                    <span>{selectedCase.type}</span>
+                    <span>{selectedCase.case_type}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Last Activity:</span>
@@ -530,7 +510,7 @@ const CasesPage = () => {
               <Button 
                 variant="destructive" 
                 className="sm:flex-1"
-                onClick={() => setDeleteConfirmOpen(false)}
+                onClick={handleDeleteCase}
               >
                 Delete Case
               </Button>
@@ -543,6 +523,7 @@ const CasesPage = () => {
       <CreateCaseModal 
         isOpen={isCreateCaseModalOpen} 
         onOpenChange={setIsCreateCaseModalOpen} 
+        onCaseCreated={() => refetch()}
       />
     </div>
   );
