@@ -6,7 +6,6 @@ import HeroSection from "@/components/landing/HeroSection";
 import FeaturesSection from "@/components/landing/FeaturesSection";
 import TestimonialsSection from "@/components/landing/TestimonialsSection";
 import PricingSection from "@/components/landing/PricingSection";
-import DemoFormSection from "@/components/landing/DemoFormSection";
 import Footer from "@/components/landing/Footer";
 
 const LandingPage = () => {
@@ -70,15 +69,6 @@ const LandingPage = () => {
           viewport={{ once: true }}
         >
           <PricingSection />
-        </motion.div>
-        
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          transition={{ duration: 0.8 }}
-          viewport={{ once: true }}
-        >
-          <DemoFormSection />
         </motion.div>
       </main>
       

@@ -2,6 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import BookDemoButton from "../BookDemoButton";
 
 const HeroSection = () => {
   return (
@@ -26,13 +27,7 @@ const HeroSection = () => {
               saving you hundreds of hours and eliminating tedious paperwork.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <Button 
-                size="lg" 
-                className="bg-doculaw-500 hover:bg-doculaw-600 text-white rounded-full px-8"
-                asChild
-              >
-                <a href="#book-demo">Book a Demo</a>
-              </Button>
+              <BookDemoButton size="lg" className="bg-doculaw-500 hover:bg-doculaw-600 text-white rounded-full px-8" />
               <Button 
                 variant="outline" 
                 size="lg" 

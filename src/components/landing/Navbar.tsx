@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import BookDemoButton from "../BookDemoButton";
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -41,7 +42,6 @@ const Navbar = () => {
             <a href="#features" className="text-gray-700 hover:text-doculaw-600 font-medium">Features</a>
             <a href="#pricing" className="text-gray-700 hover:text-doculaw-600 font-medium">Pricing</a>
             <a href="#testimonials" className="text-gray-700 hover:text-doculaw-600 font-medium">Testimonials</a>
-            <a href="#book-demo" className="text-gray-700 hover:text-doculaw-600 font-medium">Contact</a>
           </nav>
           
           {/* Auth buttons */}
@@ -53,12 +53,7 @@ const Navbar = () => {
             >
               <Link to="/login">Log In</Link>
             </Button>
-            <Button 
-              className="bg-doculaw-500 hover:bg-doculaw-600 text-white"
-              asChild
-            >
-              <a href="#book-demo">Book a Demo</a>
-            </Button>
+            <BookDemoButton />
           </div>
           
           {/* Mobile menu button */}

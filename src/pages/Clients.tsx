@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +7,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Users } from "lucide-react";
 import ClientsFilters from "@/components/filters/ClientsFilters";
-import CalendlyEmbed from "@/components/CalendlyEmbed";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 
@@ -26,7 +23,6 @@ const ClientsPage = () => {
   const { user } = useAuth();
   const [clients, setClients] = useState(mockClients);
   const [filteredClients, setFilteredClients] = useState(mockClients);
-  const [isCalendlyOpen, setIsCalendlyOpen] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
     status: "all",
@@ -83,12 +79,6 @@ const ClientsPage = () => {
             <p className="text-gray-600 mt-1">Manage your clients and their cases</p>
           </div>
           <div className="flex gap-3">
-            <Button 
-              className="bg-doculaw-500 hover:bg-doculaw-600"
-              onClick={() => setIsCalendlyOpen(true)}
-            >
-              Book a Demo
-            </Button>
             <Button className="bg-doculaw-500 hover:bg-doculaw-600">
               <PlusCircle className="mr-2 h-4 w-4" />
               Add Client
@@ -153,18 +143,6 @@ const ClientsPage = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* Calendly Dialog */}
-      <Dialog open={isCalendlyOpen} onOpenChange={setIsCalendlyOpen}>
-        <DialogContent className="max-w-3xl h-[700px] p-0">
-          <DialogHeader className="px-6 pt-6">
-            <DialogTitle>Book a Demo</DialogTitle>
-          </DialogHeader>
-          <div className="px-6 pb-6">
-            <CalendlyEmbed url="https://calendly.com/nipunbatra8/30min?hide_gdpr_banner=1&background_color=F3F4F6&text_color=000000&primary_color=5bb5a2" />
-          </div>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 };
