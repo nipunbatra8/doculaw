@@ -1,101 +1,181 @@
-
-import { useState } from 'react';
-import { Calendar as CalendarIcon, Search, Filter } from "lucide-react";
-import { format } from "date-fns";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
-
-interface ArchiveFiltersProps {
-  onSearch: (query: string) => void;
-  onFilterChange: (type: string, value: string) => void;
-  onDateChange: (dates: { from?: Date; to?: Date }) => void;
-}
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 type DateRange = {
   from?: Date;
   to?: Date;
 };
 
-const ArchiveFilters = ({ onSearch, onFilterChange, onDateChange }: ArchiveFiltersProps) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [date, setDate] = useState<DateRange>({});
-  
-  const handleSearch = () => {
-    onSearch(searchQuery);
+interface ArchiveFiltersProps {
+  onFilter: (status: string | null, date: DateRange | null, query: string | null) => void;
+}
+
+const statuses = [
+  {
+    value: "all",
+    label: "All",
+  },
+  {
+    value: "active",
+    label: "Active",
+  },
+  {
+    value: "completed",
+    label: "Completed",
+  },
+  {
+    value: "archived",
+    label: "Archived",
+  },
+];
+
+const ArchiveFilters = ({ onFilter }: ArchiveFiltersProps) => {
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [date, setDate] = useState<DateRange | null>(null);
+  const [query, setQuery] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<DateRange | undefined>(undefined);
+
+  const handleStatusSelect = (value: string) => {
+    setStatus(value === "all" ? null : value);
+    setOpen(false);
   };
 
-  const handleDateSelect = (range: DateRange) => {
-    setDate(range);
-    if (range.from || range.to) {
-      onDateChange(range);
-    }
+  const handleDateSelect = (range: DateRange | undefined) => {
+    setSelectedDate(range);
+    setDate({
+      from: range?.from || undefined,
+      to: range?.to || undefined
+    });
+  };
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value);
+  };
+
+  const applyFilters = () => {
+    onFilter(status, date, query);
+  };
+
+  const clearFilters = () => {
+    setStatus(null);
+    setDate(null);
+    setQuery(null);
+    setSelectedDate(undefined);
+    onFilter(null, null, null);
   };
 
   return (
-    <div className="mb-6 space-y-4">
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
-          <Input
-            placeholder="Search cases..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Select onValueChange={(value) => onFilterChange('caseType', value)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Case Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="Personal Injury">Personal Injury</SelectItem>
-              <SelectItem value="Business Dispute">Business Dispute</SelectItem>
-              <SelectItem value="Family Law">Family Law</SelectItem>
-              <SelectItem value="Estate Planning">Estate Planning</SelectItem>
-              <SelectItem value="Other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="ml-auto">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {date.from ? (
-                  date.to ? (
-                    <>
-                      {format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")}
-                    </>
-                  ) : (
-                    format(date.from, "LLL dd, y")
-                  )
-                ) : (
-                  "Date Range"
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={date.from}
-                selected={date}
-                onSelect={handleDateSelect}
-                numberOfMonths={2}
-              />
-            </PopoverContent>
-          </Popover>
-          
-          <Button className="bg-doculaw-500 hover:bg-doculaw-600" onClick={handleSearch}>
-            <Filter className="mr-2 h-4 w-4" />
-            Filter
+    <div className="grid gap-4 grid-cols-1 md:grid-cols-4">
+      {/* Status Filter */}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between"
+          >
+            {status
+              ? statuses.find((s) => s.value === status)?.label
+              : "Select status"}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
-        </div>
+        </PopoverTrigger>
+        <PopoverContent className="w-[200px] p-0">
+          <Command>
+            <CommandList>
+              <CommandInput placeholder="Search status..." />
+              <CommandEmpty>No status found.</CommandEmpty>
+              <CommandGroup>
+                {statuses.map((status) => (
+                  <CommandItem
+                    key={status.value}
+                    value={status.value}
+                    onSelect={() => handleStatusSelect(status.value)}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === status.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {status.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      {/* Date Range Picker */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant={"outline"}
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !date?.from && "text-muted-foreground"
+            )}
+          >
+            <Calendar className="mr-2 h-4 w-4" />
+            {selectedDate?.from ? (
+              selectedDate.to ? (
+                `${format(selectedDate.from, "MMM dd, yyyy")} - ${format(
+                  selectedDate.to,
+                  "MMM dd, yyyy"
+                )}`
+              ) : (
+                format(selectedDate.from, "MMM dd, yyyy")
+              )
+            ) : (
+              <span>Pick a date</span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="center">
+          <Calendar
+            mode="range"
+            defaultMonth={date?.from}
+            selected={selectedDate}
+            onSelect={handleDateSelect}
+            numberOfMonths={2}
+          />
+        </PopoverContent>
+      </Popover>
+
+      {/* Search Input */}
+      <div className="col-span-1 md:col-span-2 flex items-center space-x-2">
+        <Label htmlFor="search" className="hidden">
+          Search:
+        </Label>
+        <Input
+          type="search"
+          id="search"
+          placeholder="Search..."
+          value={query || ""}
+          onChange={handleSearch}
+          className="flex-1"
+        />
+      </div>
+
+      {/* Actions */}
+      <div className="flex space-x-2">
+        <Button onClick={applyFilters} className="bg-doculaw-500 hover:bg-doculaw-600">
+          Apply Filters
+        </Button>
+        <Button variant="ghost" onClick={clearFilters}>
+          Clear Filters
+        </Button>
       </div>
     </div>
   );
