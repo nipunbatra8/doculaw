@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,7 @@ const ForgotPasswordPage = () => {
     e.preventDefault();
     setIsSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/login",
+      redirectTo: window.location.origin + "/reset-password",
     });
     setIsSubmitting(false);
 
