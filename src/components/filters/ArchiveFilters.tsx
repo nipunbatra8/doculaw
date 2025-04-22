@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
@@ -43,8 +44,10 @@ const ArchiveFilters = ({ onFilter }: ArchiveFiltersProps) => {
   const [date, setDate] = useState<DateRange | null>(null);
   const [query, setQuery] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<DateRange | undefined>(undefined);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
 
   const handleStatusSelect = (value: string) => {
+    setSelectedStatus(value);
     setStatus(value === "all" ? null : value);
     setOpen(false);
   };
@@ -70,6 +73,7 @@ const ArchiveFilters = ({ onFilter }: ArchiveFiltersProps) => {
     setDate(null);
     setQuery(null);
     setSelectedDate(undefined);
+    setSelectedStatus(null);
     onFilter(null, null, null);
   };
 
@@ -105,7 +109,7 @@ const ArchiveFilters = ({ onFilter }: ArchiveFiltersProps) => {
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        value === status.value ? "opacity-100" : "opacity-0"
+                        selectedStatus === status.value ? "opacity-100" : "opacity-0"
                       )}
                     />
                     {status.label}
@@ -149,6 +153,7 @@ const ArchiveFilters = ({ onFilter }: ArchiveFiltersProps) => {
             selected={selectedDate}
             onSelect={handleDateSelect}
             numberOfMonths={2}
+            className="pointer-events-auto"
           />
         </PopoverContent>
       </Popover>
