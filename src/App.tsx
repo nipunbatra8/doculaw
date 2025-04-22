@@ -10,8 +10,7 @@ import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
-import CasesPage from "./pages/CasesPage";
-import ClientsPage from "./components/layout/Clients";
+import ClientsPage from "./pages/Clients";
 import SettingsPage from "./pages/SettingsPage";
 import ArchivePage from "./pages/ArchivePage";
 import DiscoveryRequestPage from "./pages/DiscoveryRequestPage";
@@ -39,7 +38,7 @@ const App = () => (
             
             {/* Protected routes for lawyers */}
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/cases" element={<CasesPage />} />
+            <Route path="/clients" element={<ClientsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/archive" element={<ArchivePage />} />
             <Route path="/discovery-request/:caseId" element={<DiscoveryRequestPage />} />

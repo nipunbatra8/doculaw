@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Activity, BarChart2, FileText, Briefcase, ArrowRight, Users, Clock, PlusCircle, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import CasesPage from "./CasesPage";
+import CasesPage from "../components/layout/CasesPage";
 
 // Mock data for dashboard
 const recentCases = [
