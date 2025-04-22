@@ -1,10 +1,11 @@
 
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 // Pages
 import LandingPage from "./pages/LandingPage";
@@ -45,15 +46,43 @@ const App = () => {
                 <Route path="/payment" element={<PaymentPage />} />
                 
                 {/* Protected routes for lawyers */}
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/clients" element={<ClientsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/archive" element={<ArchivePage />} />
-                <Route path="/discovery-request/:caseId" element={<DiscoveryRequestPage />} />
-                <Route path="/discovery-response/:caseId" element={<DiscoveryResponsePage />} />
+                <Route path="/dashboard" element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/clients" element={
+                  <ProtectedRoute>
+                    <ClientsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/settings" element={
+                  <ProtectedRoute>
+                    <SettingsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/archive" element={
+                  <ProtectedRoute>
+                    <ArchivePage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/discovery-request/:caseId" element={
+                  <ProtectedRoute>
+                    <DiscoveryRequestPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/discovery-response/:caseId" element={
+                  <ProtectedRoute>
+                    <DiscoveryResponsePage />
+                  </ProtectedRoute>
+                } />
                 
                 {/* Client routes */}
-                <Route path="/client-dashboard" element={<ClientDashboardPage />} />
+                <Route path="/client-dashboard" element={
+                  <ProtectedRoute>
+                    <ClientDashboardPage />
+                  </ProtectedRoute>
+                } />
                 
                 {/* 404 route */}
                 <Route path="*" element={<NotFound />} />

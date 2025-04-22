@@ -7,20 +7,34 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
-  const { user, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { toast } = useToast();
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login");
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const navigation = [
@@ -68,11 +82,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <Avatar>
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-doculaw-300 text-white">
-                  {user?.name?.charAt(0) || "U"}
+                  {profile?.name?.charAt(0) || user?.email?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-medium text-sm">{user?.name || "User Name"}</p>
+                <p className="font-medium text-sm">{profile?.name || "User"}</p>
                 <p className="text-xs text-gray-500">{user?.email || "user@example.com"}</p>
               </div>
             </div>

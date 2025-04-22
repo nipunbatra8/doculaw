@@ -50,12 +50,12 @@ const CreateCaseModal = ({
   onOpenChange: (open: boolean) => void,
   onCaseCreated?: () => void
 }) => {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CaseFormData>();
 
   const onSubmit = async (data: CaseFormData) => {
-    if (!user) {
+    if (!isAuthenticated || !user) {
       toast({
         title: "Error",
         description: "You must be logged in to create a case",

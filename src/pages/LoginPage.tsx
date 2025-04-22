@@ -1,37 +1,40 @@
 
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const { login, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+
+  // Get the redirect path from location state or default to dashboard
+  const from = location.state?.from?.pathname || "/dashboard";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setIsLoading(false);
-    if (!error) {
+    
+    try {
+      await login(email, password);
       toast({
         title: "Login successful",
         description: "Welcome back to DocuLaw",
       });
-      navigate("/dashboard");
-    } else {
+      navigate(from, { replace: true });
+    } catch (error: any) {
       toast({
         title: "Login failed",
-        description: error.message,
+        description: error.message || "Invalid credentials. Please try again.",
         variant: "destructive",
       });
     }

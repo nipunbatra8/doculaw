@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,8 +60,8 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/toast";
 
-// Mock data for team members
 const teamMembers = [
   { id: "1", name: "John Doe", email: "john.doe@example.com", role: "Admin", status: "Active", joinedDate: "Jan 2023" },
   { id: "2", name: "Jane Smith", email: "jane.smith@example.com", role: "Attorney", status: "Active", joinedDate: "Mar 2023" },
@@ -70,7 +69,6 @@ const teamMembers = [
   { id: "4", name: "Sarah Williams", email: "s.williams@example.com", role: "Attorney", status: "Pending", joinedDate: "Invited" },
 ];
 
-// Mock data for billing history
 const billingHistory = [
   { id: "1", date: "Aug 1, 2023", amount: "$299.00", status: "Paid", plan: "Professional" },
   { id: "2", date: "Jul 1, 2023", amount: "$299.00", status: "Paid", plan: "Professional" },
@@ -79,15 +77,15 @@ const billingHistory = [
 ];
 
 const SettingsPage = () => {
-  const { user, logout } = useAuth();
+  const { user, profile, logout, deleteAccount, updateProfile } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   
   const [profileForm, setProfileForm] = useState({
-    name: "John Doe",
-    email: "john.doe@example.com",
-    phone: "(555) 123-4567",
-    title: "Managing Partner",
-    bio: "Experienced attorney specializing in corporate law and litigation."
+    name: "",
+    email: "",
+    phone: "",
+    title: "",
   });
   
   const [notifications, setNotifications] = useState({
@@ -101,16 +99,82 @@ const SettingsPage = () => {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (profile) {
+      setProfileForm({
+        name: profile.name || "",
+        email: user?.email || "",
+        phone: profile.phone || "",
+        title: profile.title || "",
+      });
+    }
+  }, [profile, user]);
   
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login");
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleDeleteAccount = async () => {
+    try {
+      setIsSubmitting(true);
+      await deleteAccount();
+      navigate("/login");
+      toast({
+        title: "Account deleted",
+        description: "Your account has been successfully deleted.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete account. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+      setIsConfirmDeleteOpen(false);
+    }
+  };
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In real app, this would update the user profile
-    console.log("Profile updated:", profileForm);
+    
+    try {
+      setIsSubmitting(true);
+      await updateProfile({
+        name: profileForm.name,
+        phone: profileForm.phone,
+        title: profileForm.title,
+      });
+      
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been successfully updated.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleNotificationChange = (key: string, value: boolean) => {
@@ -177,7 +241,7 @@ const SettingsPage = () => {
                             <Avatar className="h-24 w-24">
                               <AvatarImage src="" />
                               <AvatarFallback className="bg-doculaw-200 text-doculaw-700 text-2xl">
-                                {profileForm.name.charAt(0)}
+                                {profileForm.name?.charAt(0) || user?.email?.charAt(0) || "U"}
                               </AvatarFallback>
                             </Avatar>
                             <Button 
@@ -215,8 +279,10 @@ const SettingsPage = () => {
                             id="email" 
                             type="email"
                             value={profileForm.email}
-                            onChange={(e) => setProfileForm({...profileForm, email: e.target.value})}
+                            readOnly
+                            className="bg-gray-100"
                           />
+                          <p className="text-xs text-gray-500 mt-1">Email can't be changed. Contact support for assistance.</p>
                         </div>
                         
                         <div className="space-y-1">
@@ -227,24 +293,15 @@ const SettingsPage = () => {
                             onChange={(e) => setProfileForm({...profileForm, phone: e.target.value})}
                           />
                         </div>
-                        
-                        <div className="space-y-1">
-                          <Label htmlFor="bio">Bio</Label>
-                          <Textarea 
-                            id="bio" 
-                            rows={4}
-                            value={profileForm.bio}
-                            onChange={(e) => setProfileForm({...profileForm, bio: e.target.value})}
-                          />
-                        </div>
                       </div>
                       
                       <div className="mt-6">
                         <Button 
                           type="submit" 
                           className="bg-doculaw-500 hover:bg-doculaw-600"
+                          disabled={isSubmitting}
                         >
-                          Save Changes
+                          {isSubmitting ? "Saving..." : "Save Changes"}
                         </Button>
                       </div>
                     </form>
@@ -270,6 +327,7 @@ const SettingsPage = () => {
                       <Button 
                         variant="outline" 
                         className="w-full border-red-200 text-red-600 hover:bg-red-50"
+                        onClick={() => setIsConfirmDeleteOpen(true)}
                       >
                         Delete Account
                       </Button>
@@ -694,6 +752,39 @@ const SettingsPage = () => {
             </DialogFooter>
           </DialogContent>
         )}
+      </Dialog>
+
+      {/* Account Deletion Confirmation Dialog */}
+      <Dialog open={isConfirmDeleteOpen} onOpenChange={setIsConfirmDeleteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center">
+              <AlertTriangle className="h-5 w-5 mr-2" />
+              Delete Account
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline" 
+              className="sm:flex-1"
+              onClick={() => setIsConfirmDeleteOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              className="sm:flex-1"
+              onClick={handleDeleteAccount}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Deleting..." : "Delete Account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </DashboardLayout>
   );
