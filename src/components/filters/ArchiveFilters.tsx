@@ -14,6 +14,7 @@ interface ArchiveFiltersProps {
   onDateChange: (dates: { from?: Date; to?: Date }) => void;
 }
 
+// Define DateRange to match the type expected by react-day-picker
 type DateRange = {
   from?: Date;
   to?: Date;
@@ -27,10 +28,12 @@ const ArchiveFilters = ({ onSearch, onFilterChange, onDateChange }: ArchiveFilte
     onSearch(searchQuery);
   };
 
-  const handleDateSelect = (range: DateRange) => {
-    setDate(range);
-    if (range.from || range.to) {
-      onDateChange(range);
+  const handleDateSelect = (selectedDate: DateRange | undefined) => {
+    // Ensure we're handling undefined properly
+    const newRange = selectedDate || {};
+    setDate(newRange);
+    if (newRange.from || newRange.to) {
+      onDateChange(newRange);
     }
   };
 
@@ -87,6 +90,7 @@ const ArchiveFilters = ({ onSearch, onFilterChange, onDateChange }: ArchiveFilte
                 selected={date}
                 onSelect={handleDateSelect}
                 numberOfMonths={2}
+                className="pointer-events-auto"
               />
             </PopoverContent>
           </Popover>
