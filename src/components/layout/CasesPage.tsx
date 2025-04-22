@@ -1,6 +1,8 @@
-
 import { useState } from "react";
-import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
+import CreateCaseModal from "@/components/CreateCaseModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -137,12 +139,45 @@ const casesData = [
 ];
 
 const CasesPage = () => {
+  const { user } = useAuth();
+  const [isCreateCaseModalOpen, setIsCreateCaseModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [caseDetailsOpen, setCaseDetailsOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState<any>(null);
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  // Fetch cases for the logged-in user
+  const { data: casesData = [], isLoading, error } = useQuery({
+    queryKey: ['cases', user?.id, activeTab, searchQuery],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      let query = supabase
+        .from('cases')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      // Apply tab filter
+      if (activeTab !== 'all') {
+        query = query.eq('status', activeTab);
+      }
+      
+      // Apply search query
+      if (searchQuery) {
+        query = query.or(
+          `name.ilike.%${searchQuery}%,client.ilike.%${searchQuery}%,case_type.ilike.%${searchQuery}%`
+        );
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user
+  });
 
   // Filter cases based on search query and active tab
   const filteredCases = casesData.filter(caseItem => {
@@ -178,7 +213,10 @@ const CasesPage = () => {
             <h1 className="text-3xl font-bold text-gray-900">Cases</h1>
             <p className="text-gray-600 mt-1">Manage your legal cases and discovery workflows</p>
           </div>
-          <Button className="bg-doculaw-500 hover:bg-doculaw-600 text-white">
+          <Button 
+            className="bg-doculaw-500 hover:bg-doculaw-600 text-white"
+            onClick={() => setIsCreateCaseModalOpen(true)}
+          >
             <PlusCircle className="h-4 w-4 mr-2" />
             New Case
           </Button>
@@ -219,8 +257,14 @@ const CasesPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCases.length > 0 ? (
-                  filteredCases.map((caseItem) => (
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center">
+                      Loading cases...
+                    </TableCell>
+                  </TableRow>
+                ) : casesData.length > 0 ? (
+                  casesData.map((caseItem) => (
                     <TableRow key={caseItem.id} className="cursor-pointer hover:bg-gray-50" onClick={() => handleCaseClick(caseItem)}>
                       <TableCell className="font-medium">{caseItem.name}</TableCell>
                       <TableCell>{caseItem.client}</TableCell>
@@ -494,6 +538,12 @@ const CasesPage = () => {
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Create Case Modal */}
+      <CreateCaseModal 
+        isOpen={isCreateCaseModalOpen} 
+        onOpenChange={setIsCreateCaseModalOpen} 
+      />
     </div>
   );
 };
