@@ -77,7 +77,7 @@ const billingHistory = [
 ];
 
 const SettingsPage = () => {
-  const { user, profile, logout, deleteAccount, updateProfile } = useAuth();
+  const { user, logout, deleteAccount, updateUserMetadata } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -98,20 +98,30 @@ const SettingsPage = () => {
 
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [selectedMember, setSelectedMember] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    status: string;
+    joinedDate: string;
+  } | null>(null);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (profile) {
+    if (user) {
+      // Get data from user metadata
+      const userData = user.user_metadata || {};
+      
       setProfileForm({
-        name: profile.name || "",
-        email: user?.email || "",
-        phone: profile.phone || "",
-        title: profile.title || "",
+        name: userData.name || "",
+        email: user.email || "",
+        phone: userData.phone || "",
+        title: userData.title || "",
       });
     }
-  }, [profile, user]);
+  }, [user]);
   
   const handleLogout = async () => {
     try {
@@ -139,10 +149,11 @@ const SettingsPage = () => {
         title: "Account deleted",
         description: "Your account has been successfully deleted.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete account. Please try again.";
       toast({
         title: "Error",
-        description: error.message || "Failed to delete account. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -156,7 +167,8 @@ const SettingsPage = () => {
     
     try {
       setIsSubmitting(true);
-      await updateProfile({
+      // Update user metadata directly in Supabase Auth
+      await updateUserMetadata({
         name: profileForm.name,
         phone: profileForm.phone,
         title: profileForm.title,
@@ -166,10 +178,11 @@ const SettingsPage = () => {
         title: "Profile updated",
         description: "Your profile has been successfully updated.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to update profile. Please try again.";
       toast({
         title: "Error",
-        description: error.message || "Failed to update profile. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -236,25 +249,6 @@ const SettingsPage = () => {
                   <CardContent>
                     <form onSubmit={handleProfileSubmit}>
                       <div className="space-y-4">
-                        <div className="flex justify-center mb-4">
-                          <div className="relative">
-                            <Avatar className="h-24 w-24">
-                              <AvatarImage src="" />
-                              <AvatarFallback className="bg-doculaw-200 text-doculaw-700 text-2xl">
-                                {profileForm.name?.charAt(0) || user?.email?.charAt(0) || "U"}
-                              </AvatarFallback>
-                            </Avatar>
-                            <Button 
-                              size="icon" 
-                              className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-doculaw-500 hover:bg-doculaw-600"
-                            >
-                              <Edit className="h-4 w-4" />
-                              <span className="sr-only">Change avatar</span>
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
                             <Label htmlFor="name">Full Name</Label>
                             <Input 
@@ -263,15 +257,6 @@ const SettingsPage = () => {
                               onChange={(e) => setProfileForm({...profileForm, name: e.target.value})}
                             />
                           </div>
-                          <div className="space-y-1">
-                            <Label htmlFor="title">Job Title</Label>
-                            <Input 
-                              id="title" 
-                              value={profileForm.title}
-                              onChange={(e) => setProfileForm({...profileForm, title: e.target.value})}
-                            />
-                          </div>
-                        </div>
                         
                         <div className="space-y-1">
                           <Label htmlFor="email">Email Address</Label>

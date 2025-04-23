@@ -1,4 +1,3 @@
-
 import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Briefcase, Users, Settings, Archive, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
@@ -14,11 +13,15 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
-  const { user, profile, logout } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toast } = useToast();
+  
+  // Get user metadata
+  const userData = user?.user_metadata || {};
+  const userName = userData.name || "User";
 
   const handleLogout = async () => {
     try {
@@ -82,11 +85,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <Avatar>
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-doculaw-300 text-white">
-                  {profile?.name?.charAt(0) || user?.email?.charAt(0) || "U"}
+                  {userName.charAt(0) || user?.email?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-medium text-sm">{profile?.name || "User"}</p>
+                <p className="font-medium text-sm">{userName}</p>
                 <p className="text-xs text-gray-500">{user?.email || "user@example.com"}</p>
               </div>
             </div>

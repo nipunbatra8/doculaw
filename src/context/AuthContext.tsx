@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
@@ -21,6 +20,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<void>;
+  updateUserMetadata: (metadata: { name?: string; phone?: string; title?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -131,9 +131,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!user) throw new Error('Not authenticated');
     
     try {
-      // In a production app, you would use a Supabase Edge Function to securely handle account deletion
-      // For this example, we'll just sign out
+      // First, delete user data from profiles table if it exists
+      // TODO
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', user.id);
+        
+      if (profileError) {
+        console.error('Error deleting profile:', profileError);
+        // Continue with account deletion even if profile deletion fails
+      }
+      
+      // In a production app, you would use a secure server-side endpoint or
+      // Supabase Edge Function to delete the user account, as the client SDK
+      // doesn't provide a direct method for users to delete their own accounts.
+      
+      // For this demo, we'll simulate account deletion by signing out
+      // and showing a success message to the user
       await supabase.auth.signOut();
+      
+      // In a real implementation, you would make an API call to your backend:
+      // await fetch('/api/delete-account', {
+      //   method: 'DELETE',
+      //   headers: {
+      //     'Authorization': `Bearer ${session?.access_token}`
+      //   }
+      // });
     } catch (error) {
       console.error('Delete account failed:', error);
       throw error;
@@ -159,6 +183,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateUserMetadata = async (metadata: { name?: string; phone?: string; title?: string }) => {
+    if (!user) throw new Error('Not authenticated');
+    
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: metadata
+      });
+
+      if (error) throw error;
+      
+      // Refresh the user data to include the updated metadata
+      const { data: { user: updatedUser } } = await supabase.auth.getUser();
+      if (updatedUser) {
+        setUser(updatedUser);
+      }
+    } catch (error) {
+      console.error('Update user metadata failed:', error);
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -171,6 +216,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         deleteAccount,
         updateProfile,
+        updateUserMetadata,
       }}
     >
       {children}

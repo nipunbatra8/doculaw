@@ -1,4 +1,3 @@
-
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -7,23 +6,52 @@ import { Activity, BarChart2, FileText, Briefcase, ArrowRight, Users, Clock, Plu
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import CasesPage from "../components/layout/CasesPage";
-
-// Mock data for dashboard
-const recentCases = [
-  { id: "1", name: "Smith v. Johnson", status: "Active", lastUpdated: "Today", type: "Personal Injury" },
-  { id: "2", name: "Davidson LLC v. Metro Corp", status: "Active", lastUpdated: "Yesterday", type: "Business Dispute" },
-  { id: "3", name: "Thompson Divorce", status: "Pending", lastUpdated: "2 days ago", type: "Family Law" },
-  { id: "4", name: "Williams Estate", status: "Active", lastUpdated: "3 days ago", type: "Estate Planning" },
-];
-
-const upcomingDeadlines = [
-  { id: "1", title: "File Discovery Response", case: "Smith v. Johnson", dueDate: "Tomorrow", priority: "High" },
-  { id: "2", title: "Client Meeting", case: "Davidson LLC v. Metro Corp", dueDate: "Aug 21", priority: "Medium" },
-  { id: "3", title: "Draft Motion", case: "Thompson Divorce", dueDate: "Aug 25", priority: "Medium" },
-];
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 
 const DashboardPage = () => {
   const { user } = useAuth();
+  const [activeTab] = useState("active");
+  
+  // Get the user metadata
+  const userData = user?.user_metadata || {};
+  const userName = userData.name || "Counselor";
+  const firstName = userName.split(' ')[0];
+
+  // Fetch case statistics
+  const { data: activeCasesCount = 0 } = useQuery({
+    queryKey: ['active-cases-count', user?.id],
+    queryFn: async () => {
+      if (!user) return 0;
+      
+      const { count, error } = await supabase
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'Active');
+      
+      if (error) {
+        console.error('Error fetching active cases count:', error);
+        return 0;
+      }
+      
+      return count || 0;
+    },
+    enabled: !!user
+  });
+
+  // Fetch discovery requests count
+  const { data: discoveryRequestsCount = 0 } = useQuery({
+    queryKey: ['discovery-requests-count', user?.id],
+    queryFn: async () => {
+      if (!user) return 0;
+      
+      // This is a placeholder - in a real app, you would fetch this from a discovery_requests table
+      return 7; // Currently hardcoded value
+    },
+    enabled: !!user
+  });
 
   return (
     <DashboardLayout>
@@ -31,7 +59,7 @@ const DashboardPage = () => {
         {/* Welcome message */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name?.split(' ')[0] || "Counselor"}</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Welcome back, {firstName}</h1>
             <p className="text-gray-600 mt-1">Here's what's happening with your cases today.</p>
           </div>
         </div>
@@ -44,7 +72,7 @@ const DashboardPage = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">12</div>
+                <div className="text-3xl font-bold">{activeCasesCount}</div>
                 <Briefcase className="h-6 w-6 text-doculaw-500" />
               </div>
               <div className="mt-2 text-xs text-gray-500">
@@ -59,7 +87,7 @@ const DashboardPage = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">7</div>
+                <div className="text-3xl font-bold">{discoveryRequestsCount}</div>
                 <FileText className="h-6 w-6 text-doculaw-500" />
               </div>
               <div className="mt-2 text-xs text-gray-500">
