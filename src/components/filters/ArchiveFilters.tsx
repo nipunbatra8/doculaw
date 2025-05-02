@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { DateRange } from "react-day-picker";
 
 interface ArchiveFiltersProps {
   onSearch: (query: string) => void;
@@ -14,26 +15,24 @@ interface ArchiveFiltersProps {
   onDateChange: (dates: { from?: Date; to?: Date }) => void;
 }
 
-// Define DateRange to match the type expected by react-day-picker
-type DateRange = {
-  from?: Date;
-  to?: Date;
-};
-
 const ArchiveFilters = ({ onSearch, onFilterChange, onDateChange }: ArchiveFiltersProps) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [date, setDate] = useState<DateRange>({});
+  const [date, setDate] = useState<DateRange | undefined>({
+    from: undefined,
+    to: undefined
+  });
   
   const handleSearch = () => {
     onSearch(searchQuery);
   };
 
   const handleDateSelect = (selectedDate: DateRange | undefined) => {
-    // Ensure we're handling undefined properly
-    const newRange = selectedDate || {};
-    setDate(newRange);
-    if (newRange.from || newRange.to) {
-      onDateChange(newRange);
+    setDate(selectedDate);
+    if (selectedDate) {
+      onDateChange({
+        from: selectedDate.from,
+        to: selectedDate.to
+      });
     }
   };
 
@@ -69,7 +68,7 @@ const ArchiveFilters = ({ onSearch, onFilterChange, onDateChange }: ArchiveFilte
             <PopoverTrigger asChild>
               <Button variant="outline" className="ml-auto">
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {date.from ? (
+                {date?.from ? (
                   date.to ? (
                     <>
                       {format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")}
@@ -86,7 +85,7 @@ const ArchiveFilters = ({ onSearch, onFilterChange, onDateChange }: ArchiveFilte
               <Calendar
                 initialFocus
                 mode="range"
-                defaultMonth={date.from}
+                defaultMonth={date?.from}
                 selected={date}
                 onSelect={handleDateSelect}
                 numberOfMonths={2}

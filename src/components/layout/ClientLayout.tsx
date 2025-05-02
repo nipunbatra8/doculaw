@@ -17,6 +17,10 @@ const ClientLayout = ({ children }: ClientLayoutProps) => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Get user metadata, which contains the name property
+  const userName = user?.user_metadata?.name || "Client";
+  const userEmail = user?.email || "client@example.com";
+
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -60,12 +64,12 @@ const ClientLayout = ({ children }: ClientLayoutProps) => {
               <Avatar>
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-doculaw-300 text-white">
-                  {user?.name?.charAt(0) || "C"}
+                  {userName.charAt(0) || "C"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-medium text-sm">{user?.name || "Client Name"}</p>
-                <p className="text-xs text-gray-500">{user?.email || "client@example.com"}</p>
+                <p className="font-medium text-sm">{userName}</p>
+                <p className="text-xs text-gray-500">{userEmail}</p>
               </div>
             </div>
           </div>
