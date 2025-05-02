@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { PlusCircle, Users } from "lucide-react";
 import ClientsFilters from "@/components/filters/ClientsFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import ClientInviteModal from "@/components/clients/ClientInviteModal";
 
 // Mock client data
 const mockClients = [
@@ -23,6 +25,7 @@ const ClientsPage = () => {
   const { user } = useAuth();
   const [clients, setClients] = useState(mockClients);
   const [filteredClients, setFilteredClients] = useState(mockClients);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
     status: "all",
@@ -70,6 +73,10 @@ const ClientsPage = () => {
     setFilters({ ...filters, [type]: value });
   };
 
+  const handleClientInvited = () => {
+    // In a real app, this would refresh the clients list from the database
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -79,7 +86,10 @@ const ClientsPage = () => {
             <p className="text-gray-600 mt-1">Manage your clients and their cases</p>
           </div>
           <div className="flex gap-3">
-            <Button className="bg-doculaw-500 hover:bg-doculaw-600">
+            <Button 
+              className="bg-doculaw-500 hover:bg-doculaw-600"
+              onClick={() => setShowInviteModal(true)}
+            >
               <PlusCircle className="mr-2 h-4 w-4" />
               Add Client
             </Button>
@@ -143,6 +153,12 @@ const ClientsPage = () => {
           </CardContent>
         </Card>
       </div>
+
+      <ClientInviteModal 
+        open={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        onSuccess={handleClientInvited}
+      />
     </DashboardLayout>
   );
 };

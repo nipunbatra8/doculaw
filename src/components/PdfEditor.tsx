@@ -1,17 +1,19 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Download, ZoomIn, ZoomOut, Save } from "lucide-react";
+import { CheckCircle2, Download, ZoomIn, ZoomOut, Save, Upload, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface PdfEditorProps {
   pdfUrl: string;
+  onClose?: () => void;
 }
 
-const PdfEditor = ({ pdfUrl }: PdfEditorProps) => {
+const PdfEditor = ({ pdfUrl, onClose }: PdfEditorProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [scale, setScale] = useState(1);
   const [hasSaved, setHasSaved] = useState(false);
+  const [annotations, setAnnotations] = useState<any[]>([]); // In a real app, store annotations
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { toast } = useToast();
 
@@ -60,6 +62,11 @@ const PdfEditor = ({ pdfUrl }: PdfEditorProps) => {
       description: "Form Interrogatories PDF is downloading.",
     });
   };
+  
+  const handleAnnotationChange = (newAnnotation: any) => {
+    // In a real app, this would handle annotation changes
+    setAnnotations(prev => [...prev, newAnnotation]);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -89,6 +96,11 @@ const PdfEditor = ({ pdfUrl }: PdfEditorProps) => {
             <Download className="h-4 w-4 mr-1" />
             Download
           </Button>
+          {onClose && (
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          )}
         </div>
       </div>
 

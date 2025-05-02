@@ -22,6 +22,7 @@ import ClientDashboardPage from "./pages/ClientDashboardPage";
 import CasePage from "./pages/CasePage";
 import NotFound from "./pages/NotFound";
 import PaymentPage from "./pages/PaymentPage";
+import ClientSignupPage from "./pages/ClientSignupPage";
 
 // Auth provider
 import { AuthProvider } from "./context/AuthContext";
@@ -45,6 +46,7 @@ const App = () => {
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/payment" element={<PaymentPage />} />
+                <Route path="/client-signup" element={<ClientSignupPage />} />
                 
                 {/* Protected routes for lawyers */}
                 <Route path="/dashboard" element={
@@ -73,6 +75,11 @@ const App = () => {
                   </ProtectedRoute>
                 } />
                 <Route path="/discovery-request/:caseId" element={
+                  <ProtectedRoute>
+                    <DiscoveryRequestPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/discovery-request/:caseId/:type" element={
                   <ProtectedRoute>
                     <DiscoveryRequestPage />
                   </ProtectedRoute>

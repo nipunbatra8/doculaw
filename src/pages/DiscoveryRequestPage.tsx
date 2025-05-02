@@ -25,10 +25,15 @@ import {
   Link as LinkIcon,
   ExternalLink,
   MessageSquare,
-  HelpCircle
+  HelpCircle,
+  Upload
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Link } from "react-router-dom";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import DocumentUploader from "@/components/discovery/DocumentUploader";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const discoveryTypes = [
   {
@@ -65,7 +70,11 @@ const DiscoveryRequestPage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("all");
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedDocuments, setGeneratedDocuments] = useState<string[]>([]);
 
   // Fetch case details
   const { data: caseData, isLoading } = useQuery({
@@ -92,13 +101,52 @@ const DiscoveryRequestPage = () => {
       navigate(`/case/${caseId}`, { 
         state: { 
           showPdfEditor: true,
-          formType: discoveryType.id
+          formType: discoveryType.id,
+          pdfUrl: discoveryType.pdfUrl
         }
       });
     } else {
-      // For other types, we would navigate to a different editor or form
-      navigate(`/discovery-request/${caseId}/${discoveryType.id}`);
+      // For other types, show upload complaint dialog
+      setShowUploadDialog(true);
     }
+  };
+
+  const handleFileUploaded = async (fileUrl: string) => {
+    setShowUploadDialog(false);
+    setIsGenerating(true);
+    
+    // In a real app, this would call an API to process the document and generate the discovery documents
+    // Simulate document generation with a delay
+    setTimeout(() => {
+      // Mock generated documents
+      const docs = [
+        "Form Interrogatories",
+        "Special Interrogatories",
+        "Request for Production",
+        "Request for Admissions"
+      ];
+      
+      setGeneratedDocuments(docs);
+      setIsGenerating(false);
+      
+      toast({
+        title: "Documents Generated",
+        description: "Your discovery documents have been generated successfully.",
+      });
+    }, 3000);
+  };
+
+  const handleViewDocument = (documentType: string) => {
+    const type = documentType.toLowerCase().replace(/\s/g, "-");
+    navigate(`/discovery-request/${caseId}/${type}`, {
+      state: { 
+        showPdfEditor: true,
+        formType: type,
+        pdfUrl: type === "form-interrogatories" 
+          ? "https://courts.ca.gov/sites/default/files/courts/default/2024-11/disc001.pdf"
+          : null
+      }
+    });
   };
 
   if (isLoading) {
@@ -143,39 +191,94 @@ const DiscoveryRequestPage = () => {
 
         <Separator />
 
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Select Discovery Type</h2>
-          <p className="text-gray-600">
-            Choose the type of discovery request you would like to propound in this case.
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-            {discoveryTypes.map(type => (
-              <Card 
-                key={type.id}
-                className="cursor-pointer hover:border-blue-500 transition-colors"
-                onClick={() => handleSelectDiscoveryType(type)}
-              >
-                <CardHeader className="flex flex-row items-center gap-4">
-                  <div className="bg-primary/10 p-2 rounded-full">
-                    <type.icon className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle>{type.title}</CardTitle>
-                    <CardDescription>
-                      {type.description}
-                    </CardDescription>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full">
-                    {type.id === 'form-interrogatories' ? 'Edit Form PDF' : 'Create Request'}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+        {isGenerating ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-doculaw-500 mb-4"></div>
+            <p className="text-lg text-gray-700 font-medium">Generating discovery documents...</p>
+            <p className="text-gray-500 mt-2">This may take a moment as we analyze the complaint document.</p>
           </div>
-        </div>
+        ) : generatedDocuments.length > 0 ? (
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">Generated Discovery Documents</h2>
+            <p className="text-gray-600">
+              The following discovery documents have been generated based on the uploaded complaint. 
+              Select a document to view, edit, save, or download.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              {generatedDocuments.map((doc, index) => (
+                <Card 
+                  key={index}
+                  className="cursor-pointer hover:border-blue-500 transition-colors"
+                >
+                  <CardHeader className="flex flex-row items-center gap-4">
+                    <div className="bg-primary/10 p-2 rounded-full">
+                      <FileText className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle>{doc}</CardTitle>
+                      <CardDescription>
+                        Generated from complaint document
+                      </CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Button className="w-full" onClick={() => handleViewDocument(doc)}>
+                      View & Edit
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            
+            <div className="mt-8">
+              <Button 
+                variant="outline" 
+                onClick={() => setGeneratedDocuments([])}
+                className="mr-2"
+              >
+                Start Over
+              </Button>
+              <Button onClick={() => navigate(`/case/${caseId}`)}>
+                Return to Case
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">Step 1: Select Discovery Type</h2>
+            <p className="text-gray-600">
+              Choose the type of discovery request you would like to propound in this case.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              {discoveryTypes.map(type => (
+                <Card 
+                  key={type.id}
+                  className="cursor-pointer hover:border-blue-500 transition-colors"
+                  onClick={() => handleSelectDiscoveryType(type)}
+                >
+                  <CardHeader className="flex flex-row items-center gap-4">
+                    <div className="bg-primary/10 p-2 rounded-full">
+                      <type.icon className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle>{type.title}</CardTitle>
+                      <CardDescription>
+                        {type.description}
+                      </CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Button className="w-full">
+                      {type.id === 'form-interrogatories' ? 'Edit Form PDF' : 'Create Request'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-blue-50 p-4 rounded-md mt-8">
           <div className="flex items-start">
@@ -196,6 +299,20 @@ const DiscoveryRequestPage = () => {
           </div>
         </div>
       </div>
+      
+      {/* Upload dialog */}
+      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload Complaint Document</DialogTitle>
+            <DialogDescription>
+              Upload the criminal complaint document to generate appropriate discovery requests.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DocumentUploader onFileUploaded={handleFileUploaded} />
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
