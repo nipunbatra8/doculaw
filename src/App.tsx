@@ -19,6 +19,7 @@ import ArchivePage from "./pages/ArchivePage";
 import DiscoveryRequestPage from "./pages/DiscoveryRequestPage";
 import DiscoveryResponsePage from "./pages/DiscoveryResponsePage";
 import ClientDashboardPage from "./pages/ClientDashboardPage";
+import CasePage from "./pages/CasePage";
 import NotFound from "./pages/NotFound";
 import PaymentPage from "./pages/PaymentPage";
 
@@ -64,6 +65,11 @@ const App = () => {
                 <Route path="/archive" element={
                   <ProtectedRoute>
                     <ArchivePage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/case/:caseId" element={
+                  <ProtectedRoute>
+                    <CasePage />
                   </ProtectedRoute>
                 } />
                 <Route path="/discovery-request/:caseId" element={

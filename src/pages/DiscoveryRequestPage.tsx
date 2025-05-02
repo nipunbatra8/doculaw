@@ -1,418 +1,201 @@
 
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { 
   Card, 
   CardContent, 
   CardDescription, 
-  CardFooter, 
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger
+} from "@/components/ui/tabs";
 import { 
-  ArrowLeft, 
+  ChevronLeft, 
   FileText, 
-  UploadCloud, 
-  Info, 
-  Check, 
-  X, 
-  AlertCircle, 
-  CheckCircle2
+  Link as LinkIcon,
+  ExternalLink,
+  MessageSquare,
+  HelpCircle
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator";
+import { Link } from "react-router-dom";
+
+const discoveryTypes = [
+  {
+    id: "form-interrogatories",
+    title: "Form Interrogatories",
+    description: "Standard set of questions approved for use in specific types of cases.",
+    icon: FileText,
+    pdfUrl: "https://courts.ca.gov/sites/default/files/courts/default/2024-11/disc001.pdf"
+  },
+  {
+    id: "special-interrogatories",
+    title: "Special Interrogatories",
+    description: "Custom questions tailored specifically to your case.",
+    icon: MessageSquare,
+    pdfUrl: null
+  },
+  {
+    id: "request-for-production",
+    title: "Request for Production",
+    description: "Request for opposing party to produce documents or other items.",
+    icon: LinkIcon,
+    pdfUrl: null
+  },
+  {
+    id: "request-for-admissions",
+    title: "Request for Admissions",
+    description: "Ask opposing party to admit or deny specific facts.",
+    icon: HelpCircle,
+    pdfUrl: null
+  }
+];
 
 const DiscoveryRequestPage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [requestType, setRequestType] = useState("interrogatories");
-  const [requestName, setRequestName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState("all");
 
-  // Mock case data
-  const caseData = {
-    id: caseId,
-    name: "Smith v. Johnson",
-    caseNumber: "CV-2023-12345",
-    client: "John Smith",
-    court: "County Court",
-    type: "Personal Injury"
-  };
+  // Fetch case details
+  const { data: caseData, isLoading } = useQuery({
+    queryKey: ['case', caseId],
+    queryFn: async () => {
+      if (!user || !caseId) return null;
+      
+      const { data, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', caseId)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user && !!caseId
+  });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadedFile(e.target.files[0]);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setUploadedFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!uploadedFile) {
-      toast({
-        title: "Missing document",
-        description: "Please upload a complaint document to continue",
-        variant: "destructive",
+  const handleSelectDiscoveryType = (discoveryType: typeof discoveryTypes[0]) => {
+    if (discoveryType.id === "form-interrogatories") {
+      // Navigate to case page with state to show PDF editor
+      navigate(`/case/${caseId}`, { 
+        state: { 
+          showPdfEditor: true,
+          formType: discoveryType.id
+        }
       });
-      return;
+    } else {
+      // For other types, we would navigate to a different editor or form
+      navigate(`/discovery-request/${caseId}/${discoveryType.id}`);
     }
-    
-    if (!requestName.trim()) {
-      toast({
-        title: "Missing information",
-        description: "Please provide a name for this discovery request",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setLoading(true);
-    
-    // Simulate processing
-    setTimeout(() => {
-      setLoading(false);
-      setSuccess(true);
-      setSuccessDialogOpen(true);
-    }, 2000);
   };
 
-  const handleSuccessContinue = () => {
-    setSuccessDialogOpen(false);
-    navigate("/dashboard");
-  };
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="p-6 animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/3 mb-8"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="h-40 bg-gray-200 rounded"></div>
+            <div className="h-40 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mr-2"
-              onClick={() => navigate("/dashboard")}
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Propound Discovery Request</h1>
-              <p className="text-gray-600 mt-1">Create and send a new discovery request</p>
-            </div>
+      <div className="p-6 space-y-6">
+        <div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="mb-4"
+            onClick={() => navigate(`/case/${caseId}`)}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back to Case
+          </Button>
+          
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Propound Discovery Request
+          </h1>
+          <p className="text-gray-600">
+            Create discovery requests for{" "}
+            <Link to={`/case/${caseId}`} className="text-blue-600 hover:underline">
+              {caseData?.name || "this case"}
+            </Link>
+          </p>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Select Discovery Type</h2>
+          <p className="text-gray-600">
+            Choose the type of discovery request you would like to propound in this case.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            {discoveryTypes.map(type => (
+              <Card 
+                key={type.id}
+                className="cursor-pointer hover:border-blue-500 transition-colors"
+                onClick={() => handleSelectDiscoveryType(type)}
+              >
+                <CardHeader className="flex flex-row items-center gap-4">
+                  <div className="bg-primary/10 p-2 rounded-full">
+                    <type.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle>{type.title}</CardTitle>
+                    <CardDescription>
+                      {type.description}
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Button className="w-full">
+                    {type.id === 'form-interrogatories' ? 'Edit Form PDF' : 'Create Request'}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <FileText className="h-5 w-5 mr-2 text-doculaw-500" />
-                  Discovery Request Details
-                </CardTitle>
-                <CardDescription>
-                  Upload the complaint and provide details about the discovery request
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form id="discovery-request-form" onSubmit={handleSubmit}>
-                  <div className="space-y-6">
-                    {/* Step 1: Upload Complaint */}
-                    <div className="space-y-2">
-                      <div className="flex items-center">
-                        <div className="flex items-center justify-center h-8 w-8 rounded-full bg-doculaw-100 text-doculaw-700 font-medium mr-2">
-                          01
-                        </div>
-                        <Label className="text-lg font-medium">Upload Complaint</Label>
-                      </div>
-                      <p className="text-sm text-gray-500 ml-10">
-                        Upload the complaint document to use as a reference for the discovery request
-                      </p>
-                      
-                      <div 
-                        className={`ml-10 mt-4 border-2 border-dashed rounded-lg p-6 ${
-                          uploadedFile ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-doculaw-300'
-                        } transition-colors duration-200 text-center`}
-                        onDragOver={handleDragOver}
-                        onDrop={handleDrop}
-                      >
-                        {uploadedFile ? (
-                          <div className="flex flex-col items-center">
-                            <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center mb-3">
-                              <CheckCircle2 className="h-6 w-6 text-green-600" />
-                            </div>
-                            <p className="font-medium">{uploadedFile.name}</p>
-                            <p className="text-sm text-gray-500 mt-1">
-                              {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
-                            </p>
-                            <Button 
-                              type="button"
-                              variant="outline" 
-                              size="sm"
-                              className="mt-3"
-                              onClick={() => setUploadedFile(null)}
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Remove File
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center">
-                            <UploadCloud className="h-10 w-10 text-gray-400 mb-2" />
-                            <p className="font-medium text-gray-700">
-                              Drag and drop your file here or
-                            </p>
-                            <div className="mt-3">
-                              <Button 
-                                type="button"
-                                variant="outline"
-                                onClick={() => document.getElementById('file-upload')?.click()}
-                              >
-                                Browse Files
-                              </Button>
-                              <input 
-                                id="file-upload" 
-                                type="file" 
-                                accept=".pdf,.doc,.docx" 
-                                className="hidden"
-                                onChange={handleFileChange}
-                              />
-                            </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                              Supports PDF, Word documents up to 10MB
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Step 2: Request Type and Name */}
-                    <div className="space-y-2">
-                      <div className="flex items-center">
-                        <div className="flex items-center justify-center h-8 w-8 rounded-full bg-doculaw-100 text-doculaw-700 font-medium mr-2">
-                          02
-                        </div>
-                        <Label className="text-lg font-medium">Request Details</Label>
-                      </div>
-                      <p className="text-sm text-gray-500 ml-10">
-                        Specify the type of discovery request and provide a name
-                      </p>
-                      
-                      <div className="ml-10 mt-4 grid gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="request-type">Request Type</Label>
-                          <Select value={requestType} onValueChange={setRequestType}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select request type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                <SelectItem value="interrogatories">Interrogatories</SelectItem>
-                                <SelectItem value="document-request">Request for Production of Documents</SelectItem>
-                                <SelectItem value="admissions">Request for Admissions</SelectItem>
-                                <SelectItem value="deposition">Deposition Notice</SelectItem>
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="request-name">Request Name</Label>
-                          <Input 
-                            id="request-name" 
-                            placeholder="e.g., First Set of Interrogatories to Defendant"
-                            value={requestName}
-                            onChange={(e) => setRequestName(e.target.value)}
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="special-instructions">Special Instructions (Optional)</Label>
-                          <Textarea 
-                            id="special-instructions" 
-                            placeholder="Any special instructions or notes for this discovery request"
-                            rows={3}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </form>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={() => navigate("/dashboard")}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit"
-                  form="discovery-request-form"
-                  className="bg-doculaw-500 hover:bg-doculaw-600"
-                  disabled={loading || success}
-                >
-                  {loading ? (
-                    <>Processing...</>
-                  ) : success ? (
-                    <>
-                      <Check className="h-4 w-4 mr-2" />
-                      Completed
-                    </>
-                  ) : (
-                    <>Generate Discovery Request</>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Info className="h-5 w-5 mr-2 text-doculaw-500" />
-                  Case Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-sm text-gray-500">Case Name</p>
-                  <p className="font-medium">{caseData.name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Case Number</p>
-                  <p className="font-medium">{caseData.caseNumber}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Client</p>
-                  <p className="font-medium">{caseData.client}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Court</p>
-                  <p className="font-medium">{caseData.court}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Case Type</p>
-                  <p className="font-medium">{caseData.type}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <AlertCircle className="h-5 w-5 mr-2 text-amber-500" />
-                    Tips
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Complete Information</p>
-                    <p className="text-sm text-gray-500">
-                      Ensure your complaint document is complete and contains all relevant information.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Review Generated Requests</p>
-                    <p className="text-sm text-gray-500">
-                      Always review the AI-generated discovery requests for accuracy and relevance.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Add Custom Instructions</p>
-                    <p className="text-sm text-gray-500">
-                      Use the special instructions field to provide specific guidance for the AI.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+        <div className="bg-blue-50 p-4 rounded-md mt-8">
+          <div className="flex items-start">
+            <div className="bg-blue-100 p-2 rounded-full mr-4">
+              <HelpCircle className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-medium text-blue-800 mb-1">Discovery Help</h3>
+              <p className="text-sm text-blue-700">
+                Need assistance with discovery requests? Our platform can help you create proper discovery 
+                documents that comply with court rules. For more information, check out our 
+                <a href="#" className="text-blue-600 font-medium hover:underline mx-1">
+                  Discovery Guide
+                  <ExternalLink className="h-3 w-3 inline ml-1" />
+                </a>
+              </p>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Success Dialog */}
-      <Dialog open={successDialogOpen} onOpenChange={setSuccessDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center text-green-600">
-              <CheckCircle2 className="h-6 w-6 mr-2" />
-              Discovery Request Generated
-            </DialogTitle>
-            <DialogDescription>
-              Your discovery request has been successfully generated and is ready to review.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="py-4">
-            <div className="rounded-lg border p-4 bg-gray-50">
-              <h4 className="font-medium mb-2">{requestName}</h4>
-              <p className="text-sm text-gray-500 mb-2">
-                Generated on {new Date().toLocaleDateString()}
-              </p>
-              <div className="flex items-center text-sm text-green-600">
-                <Check className="h-4 w-4 mr-1" />
-                Ready to review and send
-              </div>
-            </div>
-          </div>
-          
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline"
-              className="sm:flex-1"
-              onClick={() => setSuccessDialogOpen(false)}
-            >
-              Edit Request
-            </Button>
-            <Button 
-              className="sm:flex-1 bg-doculaw-500 hover:bg-doculaw-600"
-              onClick={handleSuccessContinue}
-            >
-              View in Cases
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 };
