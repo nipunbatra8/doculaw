@@ -57,11 +57,16 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
     setIsSubmitting(true);
     
     try {
-      // In a real implementation, this would call a Supabase Edge Function
-      // that sends an invitation email with a magic link for the client
+      // Call the Supabase edge function to send the invitation email
+      const { data, error } = await supabase.functions.invoke('send-client-invitation', {
+        body: {
+          email: values.email,
+          firstName: values.firstName,
+          lastName: values.lastName
+        }
+      });
       
-      // Simulate API call with a timeout
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      if (error) throw error;
       
       toast({
         title: "Invitation sent",

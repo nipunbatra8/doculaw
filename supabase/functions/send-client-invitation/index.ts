@@ -32,22 +32,31 @@ serve(async (req) => {
     // Generate a unique invitation token
     const invitationToken = crypto.randomUUID();
     
-    // Store the invitation in the database
-    // In a real implementation, save invitation to a table
+    // Use Supabase Auth API to invite the user by email
+    const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(email, {
+      data: {
+        firstName,
+        lastName,
+        invitationToken,
+        role: 'client'
+      },
+      redirectTo: `${new URL(req.url).origin}/client-signup?invitation_token=${invitationToken}`
+    });
     
-    // Generate the signup link with the token
-    const signupLink = `${new URL(req.url).origin}/client-signup?email=${encodeURIComponent(email)}&invitation_token=${invitationToken}`;
+    if (authError) {
+      throw authError;
+    }
     
-    // In a real implementation, send the email with the signup link
-    // Here, we just simulate it and return the link
+    console.log(`Invitation email sent to ${email}`);
     
-    console.log(`Invitation email would be sent to ${email} with signup link: ${signupLink}`);
+    // In a real implementation, you might want to store additional client data
+    // in a clients table or update an existing record
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: `Invitation sent to ${email}`,
-        debug: { signupLink } // In production, remove this debug info
+        data: authData
       }),
       { 
         status: 200, 

@@ -26,7 +26,8 @@ import {
   ExternalLink,
   MessageSquare,
   HelpCircle,
-  Upload
+  Upload,
+  Check
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Link } from "react-router-dom";
@@ -34,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import DocumentUploader from "@/components/discovery/DocumentUploader";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const discoveryTypes = [
   {
@@ -73,8 +75,16 @@ const DiscoveryRequestPage = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("all");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [showDocumentSelectionDialog, setShowDocumentSelectionDialog] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedDocuments, setGeneratedDocuments] = useState<string[]>([]);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+  const [selectedDocumentTypes, setSelectedDocumentTypes] = useState<string[]>([
+    "form-interrogatories",
+    "special-interrogatories",
+    "request-for-production",
+    "request-for-admissions"
+  ]);
 
   // Fetch case details
   const { data: caseData, isLoading } = useQuery({
@@ -112,19 +122,23 @@ const DiscoveryRequestPage = () => {
   };
 
   const handleFileUploaded = async (fileUrl: string) => {
+    setUploadedFileUrl(fileUrl);
     setShowUploadDialog(false);
+    setShowDocumentSelectionDialog(true);
+  };
+
+  const handleGenerateDocuments = async () => {
+    setShowDocumentSelectionDialog(false);
     setIsGenerating(true);
     
     // In a real app, this would call an API to process the document and generate the discovery documents
     // Simulate document generation with a delay
     setTimeout(() => {
-      // Mock generated documents
-      const docs = [
-        "Form Interrogatories",
-        "Special Interrogatories",
-        "Request for Production",
-        "Request for Admissions"
-      ];
+      // Only include the selected document types
+      const docs = selectedDocumentTypes.map(type => {
+        const doc = discoveryTypes.find(d => d.id === type);
+        return doc?.title || "";
+      }).filter(title => title !== "");
       
       setGeneratedDocuments(docs);
       setIsGenerating(false);
@@ -145,6 +159,16 @@ const DiscoveryRequestPage = () => {
         pdfUrl: type === "form-interrogatories" 
           ? "https://courts.ca.gov/sites/default/files/courts/default/2024-11/disc001.pdf"
           : null
+      }
+    });
+  };
+
+  const toggleDocumentType = (typeId: string) => {
+    setSelectedDocumentTypes(prev => {
+      if (prev.includes(typeId)) {
+        return prev.filter(id => id !== typeId);
+      } else {
+        return [...prev, typeId];
       }
     });
   };
@@ -234,7 +258,16 @@ const DiscoveryRequestPage = () => {
             <div className="mt-8">
               <Button 
                 variant="outline" 
-                onClick={() => setGeneratedDocuments([])}
+                onClick={() => {
+                  setGeneratedDocuments([]);
+                  setUploadedFileUrl(null);
+                  setSelectedDocumentTypes([
+                    "form-interrogatories",
+                    "special-interrogatories",
+                    "request-for-production",
+                    "request-for-admissions"
+                  ]);
+                }}
                 className="mr-2"
               >
                 Start Over
@@ -311,6 +344,60 @@ const DiscoveryRequestPage = () => {
           </DialogHeader>
           
           <DocumentUploader onFileUploaded={handleFileUploaded} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Document selection dialog */}
+      <Dialog open={showDocumentSelectionDialog} onOpenChange={setShowDocumentSelectionDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Documents to Generate</DialogTitle>
+            <DialogDescription>
+              Choose which discovery documents you would like to generate from the uploaded complaint.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {discoveryTypes.map(type => (
+              <div key={type.id} className="flex items-start space-x-3">
+                <Checkbox 
+                  id={type.id} 
+                  checked={selectedDocumentTypes.includes(type.id)}
+                  onCheckedChange={() => toggleDocumentType(type.id)}
+                />
+                <div>
+                  <label
+                    htmlFor={type.id}
+                    className="font-medium text-sm flex items-center cursor-pointer"
+                  >
+                    <type.icon className="h-4 w-4 mr-2" />
+                    {type.title}
+                  </label>
+                  <p className="text-xs text-gray-500 ml-6">
+                    {type.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDocumentSelectionDialog(false);
+                setUploadedFileUrl(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleGenerateDocuments}
+              disabled={selectedDocumentTypes.length === 0}
+            >
+              Generate Documents
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
