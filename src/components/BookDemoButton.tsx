@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -5,7 +6,7 @@ import CalendlyEmbed from "@/components/CalendlyEmbed";
 
 interface BookDemoButtonProps {
   className?: string;
-  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
+  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link" | "white-outline";
   size?: "default" | "sm" | "lg" | "icon";
   children?: React.ReactNode;
 }
