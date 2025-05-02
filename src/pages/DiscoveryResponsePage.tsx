@@ -260,7 +260,7 @@ const DiscoveryResponsePage = () => {
 
   const handleSuccessContinue = () => {
     setSuccessDialogOpen(false);
-    navigate("/cases");
+    navigate("/dashboard");
   };
 
   return (
@@ -272,7 +272,7 @@ const DiscoveryResponsePage = () => {
               variant="ghost"
               size="sm"
               className="mr-2"
-              onClick={() => navigate("/cases")}
+              onClick={() => navigate("/dashboard")}
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back
@@ -772,7 +772,7 @@ const DiscoveryResponsePage = () => {
                 {activeStep === 1 && (
                   <Button
                     variant="outline"
-                    onClick={() => navigate("/cases")}
+                    onClick={() => navigate("/dashboard")}
                   >
                     Cancel
                   </Button>

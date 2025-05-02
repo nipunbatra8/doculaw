@@ -115,7 +115,7 @@ const DiscoveryRequestPage = () => {
 
   const handleSuccessContinue = () => {
     setSuccessDialogOpen(false);
-    navigate("/cases");
+    navigate("/dashboard");
   };
 
   return (
@@ -127,7 +127,7 @@ const DiscoveryRequestPage = () => {
               variant="ghost"
               size="sm"
               className="mr-2"
-              onClick={() => navigate("/cases")}
+              onClick={() => navigate("/dashboard")}
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back
@@ -279,7 +279,7 @@ const DiscoveryRequestPage = () => {
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
-                  onClick={() => navigate("/cases")}
+                  onClick={() => navigate("/dashboard")}
                 >
                   Cancel
                 </Button>
