@@ -30,8 +30,7 @@ const formSchema = z.object({
   firstName: z.string().min(2, { message: "First name must be at least 2 characters" }),
   lastName: z.string().min(2, { message: "Last name must be at least 2 characters" }),
   email: z.string().email({ message: "Please enter a valid email address" }),
-  phone: z.string().optional(),
-  caseType: z.string().min(1, { message: "Case type is required" }),
+  phone: z.string().min(10, { message: "Phone number is required and must be valid" }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -54,7 +53,6 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
       lastName: "",
       email: "",
       phone: "",
-      caseType: "",
     },
   });
 
@@ -87,28 +85,23 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
           first_name: data.firstName,
           last_name: data.lastName,
           email: data.email,
-          phone: data.phone || null,
-          case_type: data.caseType,
+          phone: data.phone,
         })
         .select()
         .single();
 
       if (clientError) throw clientError;
 
-      // Call the Supabase Edge Function to send the invitation
-      const { data: inviteData, error: inviteError } = await supabase.functions.invoke("send-client-invitation", {
-        body: {
-          email: data.email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-        },
+      // Send a password reset email so they can set their password
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(data.email, {
+        redirectTo: `${window.location.origin}/reset-password?clientOnboarding=true`,
       });
 
-      if (inviteError) throw inviteError;
+      if (resetError) throw resetError;
 
       toast({
-        title: "Client invited",
-        description: `An invitation email has been sent to ${data.email}`,
+        title: "Success",
+        description: `${data.firstName} has been added and a password setup link sent to ${data.email}.`,
       });
 
       resetForm();
@@ -130,9 +123,9 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Invite New Client</DialogTitle>
+          <DialogTitle>Add New Client</DialogTitle>
           <DialogDescription>
-            Send an invitation email to add a new client. They will receive instructions to set up their account.
+            Add a new client and send them a password setup link to access the client portal.
           </DialogDescription>
         </DialogHeader>
         
@@ -187,36 +180,9 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Phone Number (Optional)</FormLabel>
+                  <FormLabel>Phone Number</FormLabel>
                   <FormControl>
                     <Input placeholder="(555) 123-4567" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="caseType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Case Type</FormLabel>
-                  <FormControl>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      {...field}
-                    >
-                      <option value="">Select Case Type</option>
-                      <option value="Personal Injury">Personal Injury</option>
-                      <option value="Family Law">Family Law</option>
-                      <option value="Criminal Defense">Criminal Defense</option>
-                      <option value="Estate Planning">Estate Planning</option>
-                      <option value="Business Dispute">Business Dispute</option>
-                      <option value="Civil Rights">Civil Rights</option>
-                      <option value="Immigration">Immigration</option>
-                      <option value="Other">Other</option>
-                    </select>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -237,7 +203,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
                 disabled={isSubmitting}
                 className="bg-doculaw-500 hover:bg-doculaw-600"
               >
-                {isSubmitting ? "Sending..." : "Send Invitation"}
+                {isSubmitting ? "Adding..." : "Add Client & Send Setup Link"}
               </Button>
             </DialogFooter>
           </form>
