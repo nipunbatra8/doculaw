@@ -11,7 +11,6 @@ import ClientsFilters from "@/components/filters/ClientsFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import ClientInviteModal from "@/components/clients/ClientInviteModal";
-import ClientDetailsModal from "@/components/clients/ClientDetailsModal";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,6 +20,7 @@ interface Client {
   last_name: string;
   email: string;
   phone: string | null;
+  case_type: string | null;
   status: string;
   created_at: string;
   cases_count: number;
@@ -31,11 +31,10 @@ const ClientsPage = () => {
   const { toast } = useToast();
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
     status: "all",
+    caseType: "all",
   });
 
   // Fetch clients from the database
@@ -44,32 +43,23 @@ const ClientsPage = () => {
     queryFn: async () => {
       if (!user) return [];
       
-      // Get clients
-      const { data: clientsData, error: clientsError } = await supabase
+      const { data, error } = await supabase
         .from('clients')
         .select('*')
         .eq('lawyer_id', user.id);
       
-      if (clientsError) throw clientsError;
+      if (error) {
+        throw error;
+      }
       
-      // Get case counts for each client
-      const clientsWithCounts = await Promise.all(
-        clientsData.map(async (client) => {
-          const { count, error: countError } = await supabase
-            .from('cases')
-            .select('*', { count: 'exact', head: true })
-            .eq('client', client.id);
-          
-          return {
-            ...client,
-            name: `${client.first_name} ${client.last_name}`,
-            status: 'Active', // Default status until we have real status tracking
-            cases_count: count || 0,
-          };
-        })
-      );
-      
-      return clientsWithCounts;
+      // Transform the data to include status and cases_count
+      // In a real app, we would join with the cases table to get actual case counts
+      return data.map(client => ({
+        ...client,
+        name: `${client.first_name} ${client.last_name}`,
+        status: 'Active', // Default status until we have real status tracking
+        cases_count: 0,    // Default count until we implement case counting
+      }));
     },
     enabled: !!user
   });
@@ -103,6 +93,11 @@ const ClientsPage = () => {
       );
     }
 
+    // Filter by case type
+    if (filters.caseType !== "all") {
+      filtered = filtered.filter((c) => c.case_type === filters.caseType);
+    }
+
     setFilteredClients(filtered);
   };
 
@@ -114,25 +109,12 @@ const ClientsPage = () => {
     setFilters({ ...filters, [type]: value });
   };
 
-  const handleClientAdded = () => {
+  const handleClientInvited = () => {
     refetch();
     toast({
       title: "Success",
-      description: "Client has been added to your clients list.",
+      description: "Client has been invited and added to your clients list.",
     });
-  };
-  
-  const handleClientUpdated = () => {
-    refetch();
-    toast({
-      title: "Success",
-      description: "Client information has been updated.",
-    });
-  };
-  
-  const handleClientRowClick = (clientId: string) => {
-    setSelectedClientId(clientId);
-    setShowDetailsModal(true);
   };
 
   return (
@@ -207,17 +189,14 @@ const ClientsPage = () => {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Contact</TableHead>
+                    <TableHead>Case Type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Cases</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredClients.map((client) => (
-                    <TableRow 
-                      key={client.id}
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => handleClientRowClick(client.id)}
-                    >
+                    <TableRow key={client.id}>
                       <TableCell>
                         <div className="flex items-center">
                           <Avatar className="h-8 w-8 mr-2">
@@ -232,6 +211,7 @@ const ClientsPage = () => {
                         <div>{client.email}</div>
                         <div className="text-sm text-gray-500">{client.phone || "No phone"}</div>
                       </TableCell>
+                      <TableCell>{client.case_type || "Not specified"}</TableCell>
                       <TableCell>
                         <Badge
                           variant={client.status === "Active" ? "default" : "secondary"}
@@ -252,17 +232,7 @@ const ClientsPage = () => {
       <ClientInviteModal 
         open={showInviteModal}
         onClose={() => setShowInviteModal(false)}
-        onSuccess={handleClientAdded}
-      />
-
-      <ClientDetailsModal
-        open={showDetailsModal}
-        onClose={() => {
-          setShowDetailsModal(false);
-          setSelectedClientId(null);
-        }}
-        onSuccess={handleClientUpdated}
-        clientId={selectedClientId}
+        onSuccess={handleClientInvited}
       />
     </DashboardLayout>
   );
