@@ -1,32 +1,25 @@
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
-interface ProtectedRouteProps {
+interface Props {
   children: ReactNode;
-  redirectTo?: string;
 }
 
-const ProtectedRoute = ({ 
-  children, 
-  redirectTo = "/login" 
-}: ProtectedRouteProps) => {
-  const { isAuthenticated, isLoading } = useAuth();
+const ProtectedRoute = ({ children }: Props) => {
+  const { isAuthenticated, isLoading, user, needsOnboarding } = useAuth();
   const location = useLocation();
 
-  if (isLoading) {
-    // You could show a loading spinner here
-    return (
-      <div className="h-screen w-full flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-doculaw-500"></div>
-      </div>
-    );
+  // Check if user is authenticated, not loading, and determine if they need to be redirected to onboarding
+  if (!isLoading && !isAuthenticated) {
+    // Not authenticated, redirect to login
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (!isAuthenticated) {
-    // Redirect to login page with the return url
-    return <Navigate to={redirectTo} state={{ from: location }} replace />;
+  // Check if user needs onboarding and is not already on the onboarding page
+  if (!isLoading && isAuthenticated && needsOnboarding && location.pathname !== "/onboarding") {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return <>{children}</>;

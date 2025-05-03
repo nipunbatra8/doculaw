@@ -23,6 +23,7 @@ import CasePage from "./pages/CasePage";
 import NotFound from "./pages/NotFound";
 import PaymentPage from "./pages/PaymentPage";
 import ClientSignupPage from "./pages/ClientSignupPage";
+import OnboardingPage from "./pages/OnboardingPage";
 
 // Auth provider
 import { AuthProvider } from "./context/AuthContext";
@@ -47,6 +48,13 @@ const App = () => {
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/payment" element={<PaymentPage />} />
                 <Route path="/client-signup" element={<ClientSignupPage />} />
+                
+                {/* Onboarding route */}
+                <Route path="/onboarding" element={
+                  <ProtectedRoute>
+                    <OnboardingPage />
+                  </ProtectedRoute>
+                } />
                 
                 {/* Protected routes for lawyers */}
                 <Route path="/dashboard" element={

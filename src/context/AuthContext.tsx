@@ -8,6 +8,8 @@ interface Profile {
   email: string | null;
   title: string | null;
   phone: string | null;
+  onboarding_completed: boolean | null;
+  referral_source: string | null;
 }
 
 interface AuthContextType {
@@ -15,6 +17,7 @@ interface AuthContextType {
   profile: Profile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  needsOnboarding: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -30,6 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     // Set up auth state listener
@@ -44,6 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           fetchProfile(currentSession.user.id);
         } else {
           setProfile(null);
+          setNeedsOnboarding(false);
         }
       }
     );
@@ -65,6 +70,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // Check if user needs to complete onboarding
+  useEffect(() => {
+    if (user && profile) {
+      // If profile exists but onboarding is not completed, user needs to complete onboarding
+      setNeedsOnboarding(!profile.onboarding_completed);
+    } else if (user && !profile) {
+      // If user exists but profile doesn't exist, user needs to complete onboarding
+      setNeedsOnboarding(true);
+    }
+  }, [user, profile]);
+
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -75,12 +91,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) {
         console.error('Error fetching profile:', error);
+        // Profile doesn't exist, so user needs onboarding
+        setNeedsOnboarding(true);
         return;
       }
 
       setProfile(data as Profile);
+      // Set onboarding flag based on profile status
+      setNeedsOnboarding(data ? !data.onboarding_completed : true);
     } catch (error) {
       console.error('Failed to fetch profile:', error);
+      setNeedsOnboarding(true);
     }
   };
 
@@ -177,6 +198,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // Update local profile state
       setProfile(prev => prev ? { ...prev, ...data } : null);
+      
+      // If onboarding was just completed, update the flag
+      if (data.onboarding_completed) {
+        setNeedsOnboarding(false);
+      }
     } catch (error) {
       console.error('Update profile failed:', error);
       throw error;
@@ -211,6 +237,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         profile,
         isLoading,
         isAuthenticated: !!user,
+        needsOnboarding,
         login,
         signup,
         logout,

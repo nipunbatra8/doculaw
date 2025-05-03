@@ -45,13 +45,54 @@ export type Database = {
         }
         Relationships: []
       }
+      clients: {
+        Row: {
+          case_type: string | null
+          created_at: string
+          email: string
+          first_name: string
+          id: string
+          last_name: string
+          lawyer_id: string
+          phone: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          case_type?: string | null
+          created_at?: string
+          email: string
+          first_name: string
+          id?: string
+          last_name: string
+          lawyer_id: string
+          phone?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          case_type?: string | null
+          created_at?: string
+          email?: string
+          first_name?: string
+          id?: string
+          last_name?: string
+          lawyer_id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
           email: string | null
           id: string
           name: string | null
+          onboarding_completed: boolean | null
           phone: string | null
+          referral_source: string | null
           title: string | null
           updated_at: string
         }
@@ -60,7 +101,9 @@ export type Database = {
           email?: string | null
           id: string
           name?: string | null
+          onboarding_completed?: boolean | null
           phone?: string | null
+          referral_source?: string | null
           title?: string | null
           updated_at?: string
         }
@@ -69,7 +112,9 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string | null
+          onboarding_completed?: boolean | null
           phone?: string | null
+          referral_source?: string | null
           title?: string | null
           updated_at?: string
         }

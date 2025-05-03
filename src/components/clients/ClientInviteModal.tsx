@@ -3,18 +3,16 @@ import { useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle 
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -23,67 +21,104 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-
-interface ClientInviteModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
-}
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 
 // Form validation schema
 const formSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address." }),
-  firstName: z.string().min(1, { message: "First name is required." }),
-  lastName: z.string().min(1, { message: "Last name is required." }),
+  firstName: z.string().min(2, { message: "First name must be at least 2 characters" }),
+  lastName: z.string().min(2, { message: "Last name must be at least 2 characters" }),
+  email: z.string().email({ message: "Please enter a valid email address" }),
+  phone: z.string().optional(),
+  caseType: z.string().min(1, { message: "Case type is required" }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
+interface ClientInviteModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
 const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Initialize form
+  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: "",
       firstName: "",
       lastName: "",
+      email: "",
+      phone: "",
+      caseType: "",
     },
   });
 
-  const handleSubmit = async (values: FormValues) => {
-    setIsSubmitting(true);
+  const resetForm = () => {
+    form.reset();
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
+  const onSubmit = async (data: FormValues) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to invite clients",
+        variant: "destructive",
+      });
+      return;
+    }
     
+    setIsSubmitting(true);
     try {
-      // Call the Supabase edge function to send the invitation email
-      const { data, error } = await supabase.functions.invoke('send-client-invitation', {
+      // First, store the client information in our clients table
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .insert({
+          lawyer_id: user.id,
+          first_name: data.firstName,
+          last_name: data.lastName,
+          email: data.email,
+          phone: data.phone || null,
+          case_type: data.caseType,
+        })
+        .select()
+        .single();
+
+      if (clientError) throw clientError;
+
+      // Call the Supabase Edge Function to send the invitation
+      const { data: inviteData, error: inviteError } = await supabase.functions.invoke("send-client-invitation", {
         body: {
-          email: values.email,
-          firstName: values.firstName,
-          lastName: values.lastName
-        }
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+        },
       });
-      
-      if (error) throw error;
-      
+
+      if (inviteError) throw inviteError;
+
       toast({
-        title: "Invitation sent",
-        description: `An invitation has been sent to ${values.email}.`,
+        title: "Client invited",
+        description: `An invitation email has been sent to ${data.email}`,
       });
-      
-      if (onSuccess) {
-        onSuccess();
-      }
-      
-      onClose();
-      form.reset();
+
+      resetForm();
+      onSuccess();
+      handleClose();
     } catch (error: any) {
-      console.error("Error sending invitation:", error);
+      console.error("Error inviting client:", error);
       toast({
-        title: "Failed to send invitation",
-        description: error.message || "Please try again later.",
+        title: "Error",
+        description: error.message || "Failed to invite client. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -92,40 +127,26 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Invite a Client</DialogTitle>
+          <DialogTitle>Invite New Client</DialogTitle>
           <DialogDescription>
-            Send an invitation email to your client to create an account and access their case documents.
+            Send an invitation email to add a new client. They will receive instructions to set up their account.
           </DialogDescription>
         </DialogHeader>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email address</FormLabel>
-                  <FormControl>
-                    <Input placeholder="client@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="firstName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>First name</FormLabel>
+                    <FormLabel>First Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="John" {...field} />
+                      <Input placeholder="First name" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -137,9 +158,9 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
                 name="lastName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Last name</FormLabel>
+                    <FormLabel>Last Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Doe" {...field} />
+                      <Input placeholder="Last name" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -147,16 +168,75 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
               />
             </div>
             
-            <DialogFooter className="mt-6">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={onClose}
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email Address</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="client@example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone Number (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="(555) 123-4567" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="caseType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Case Type</FormLabel>
+                  <FormControl>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      {...field}
+                    >
+                      <option value="">Select Case Type</option>
+                      <option value="Personal Injury">Personal Injury</option>
+                      <option value="Family Law">Family Law</option>
+                      <option value="Criminal Defense">Criminal Defense</option>
+                      <option value="Estate Planning">Estate Planning</option>
+                      <option value="Business Dispute">Business Dispute</option>
+                      <option value="Civil Rights">Civil Rights</option>
+                      <option value="Immigration">Immigration</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <DialogFooter className="sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
                 disabled={isSubmitting}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button 
+                type="submit"
+                disabled={isSubmitting}
+                className="bg-doculaw-500 hover:bg-doculaw-600"
+              >
                 {isSubmitting ? "Sending..." : "Send Invitation"}
               </Button>
             </DialogFooter>
