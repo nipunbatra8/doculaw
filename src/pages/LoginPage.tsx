@@ -145,10 +145,10 @@ export default function LoginPage() {
             <p className="mt-2 text-center text-sm text-gray-500">
               Or{" "}
               <Link
-                to="/"
+                to="/payment"
                 className="font-medium text-doculaw-600 hover:text-doculaw-500"
               >
-                return to home page
+                lawyers can sign up here
               </Link>
             </p>
           </div>
@@ -213,20 +213,6 @@ export default function LoginPage() {
                   </Button>
                 </form>
               </Form>
-
-              {/* Client login CTA */}
-              <div className="mt-6 px-4 py-3 bg-gray-50 border border-gray-100 rounded-md">
-                <p className="text-sm text-center text-gray-600">
-                  Are you a client?
-                </p>
-                <Button
-                  variant="outline"
-                  className="w-full mt-2"
-                  onClick={() => navigate('/login?client=true')}
-                >
-                  Sign in as Client
-                </Button>
-              </div>
 
               <div className="mt-6">
                 <p className="text-xs text-center text-gray-500">
