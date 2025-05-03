@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -34,6 +33,7 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import PdfEditor from "@/components/PdfEditor";
+import CriminalComplaintUploader from "@/components/upload/CriminalComplaintUploader";
 
 // Type for case data from Supabase
 type CaseData = {
@@ -51,6 +51,8 @@ type CaseData = {
   caseNumber?: string;
   court?: string;
   filedDate?: string;
+  complaint_processed?: boolean;
+  complaint_data?: any;
 };
 
 const CasePage = () => {
@@ -112,9 +114,9 @@ const CasePage = () => {
       return {
         ...data,
         lastActivity: formatRelativeTime(data.updated_at),
-        caseNumber: `CV-${new Date(data.created_at).getFullYear()}-${data.id.substring(0, 5)}`,
-        court: getCourt(data.case_type),
-        filedDate: format(parseISO(data.created_at), 'MMM d, yyyy')
+        caseNumber: data.complaint_data?.caseNumber || `CV-${new Date(data.created_at).getFullYear()}-${data.id.substring(0, 5)}`,
+        court: data.complaint_data?.court || getCourt(data.case_type),
+        filedDate: data.complaint_data?.filingDate ? format(parseISO(data.complaint_data.filingDate), 'MMM d, yyyy') : format(parseISO(data.created_at), 'MMM d, yyyy')
       };
     },
     enabled: !!user && !!caseId
@@ -135,6 +137,33 @@ const CasePage = () => {
       }
     }
   }, [caseData]);
+
+  // Handle criminal complaint processing
+  const handleComplaintProcessed = async (complaintData: any) => {
+    if (!user || !caseId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('cases')
+        .update({
+          complaint_processed: true,
+          complaint_data: complaintData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', caseId);
+        
+      if (error) throw error;
+      
+      refetch();
+    } catch (error) {
+      console.error('Error updating case with complaint data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update case data. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   // Utility function to determine court based on case type
   const getCourt = (caseType: string | null): string => {
@@ -524,6 +553,14 @@ const CasePage = () => {
               </CardContent>
             </Card>
 
+            {/* Criminal Complaint Upload */}
+            {!caseData.complaint_processed && (
+              <CriminalComplaintUploader 
+                caseId={caseData.id} 
+                onComplaintProcessed={handleComplaintProcessed} 
+              />
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle>Discovery Status</CardTitle>
@@ -559,7 +596,13 @@ const CasePage = () => {
                 <div className="mt-6 space-y-4">
                   <h3 className="font-medium text-gray-800">Quick Actions</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    <Button variant="outline" className="justify-start" onClick={() => navigate(`/discovery-request/${caseId}`)}>
+                    <Button 
+                      variant="outline" 
+                      className="justify-start" 
+                      onClick={() => navigate(`/discovery-request/${caseId}`)}
+                      disabled={!caseData.complaint_processed}
+                      title={!caseData.complaint_processed ? "Upload Criminal Complaint first" : ""}
+                    >
                       <FileText className="h-4 w-4 mr-2" />
                       Propound Discovery Request
                     </Button>
@@ -591,6 +634,20 @@ const CasePage = () => {
                   <div>
                     <h3 className="font-medium text-gray-800 mb-3">Discovery Documents</h3>
                     <div className="border rounded-md divide-y">
+                      {caseData.complaint_processed && caseData.complaint_data && (
+                        <div className="p-4 flex items-center justify-between hover:bg-gray-50">
+                          <div className="flex items-center">
+                            <FileText className="h-5 w-5 text-blue-500 mr-3" />
+                            <div>
+                              <p className="font-medium">Criminal Complaint</p>
+                              <p className="text-sm text-gray-500">Uploaded: {format(new Date(), 'MMM d, yyyy')}</p>
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="sm">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                       <div className="p-4 flex items-center justify-between hover:bg-gray-50">
                         <div className="flex items-center">
                           <FileText className="h-5 w-5 text-blue-500 mr-3" />
@@ -632,12 +689,29 @@ const CasePage = () => {
                   
                   <div>
                     <h3 className="font-medium text-gray-800 mb-3">Court Filings</h3>
-                    <div className="border rounded-md p-6 text-center text-gray-500">
-                      <p>No court filings have been uploaded yet.</p>
-                      <Button variant="outline" className="mt-4">
-                        Upload Court Filing
-                      </Button>
-                    </div>
+                    {!caseData.complaint_processed ? (
+                      <div className="border rounded-md p-6 text-center text-gray-500">
+                        <p>No court filings have been uploaded yet.</p>
+                        <Button variant="outline" className="mt-4" onClick={() => setActiveTab("details")}>
+                          Upload Criminal Complaint
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="border rounded-md divide-y">
+                        <div className="p-4 flex items-center justify-between hover:bg-gray-50">
+                          <div className="flex items-center">
+                            <FileText className="h-5 w-5 text-blue-500 mr-3" />
+                            <div>
+                              <p className="font-medium">Criminal Complaint</p>
+                              <p className="text-sm text-gray-500">Case Number: {caseData.complaint_data?.caseNumber}</p>
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="sm">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -661,6 +735,17 @@ const CasePage = () => {
                       <div className="font-medium">Case Created</div>
                       <div className="text-sm text-gray-500">{format(parseISO(caseData.created_at), 'MMMM d, yyyy - h:mm a')}</div>
                     </div>
+                    
+                    {caseData.complaint_processed && (
+                      <div className="relative pl-10 pb-8">
+                        <div className="absolute left-0 top-1 w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div className="font-medium">Criminal Complaint Uploaded</div>
+                        <div className="text-sm text-gray-500">{format(new Date(), 'MMMM d, yyyy - h:mm a')}</div>
+                        <div className="mt-2 text-sm">Case details were updated from the criminal complaint</div>
+                      </div>
+                    )}
                     
                     <div className="relative pl-10 pb-8">
                       <div className="absolute left-0 top-1 w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
@@ -766,204 +851,3 @@ const CasePage = () => {
             <div className="flex-grow overflow-auto">
               <PdfEditor pdfUrl="https://courts.ca.gov/sites/default/files/courts/default/2024-11/disc001.pdf" />
             </div>
-            
-            <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => setShowPdfEditor(false)}>Close</Button>
-              <Button>Save Changes</Button>
-              <Button variant="secondary">
-                <Download className="h-4 w-4 mr-2" />
-                Download PDF
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-red-600 flex items-center">
-              <AlertTriangle className="h-5 w-5 mr-2" />
-              Delete Case
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete the case "{caseData.name}"? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline" 
-              className="sm:flex-1"
-              onClick={() => setDeleteConfirmOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="destructive" 
-              className="sm:flex-1"
-              onClick={handleDeleteCase}
-            >
-              Delete Case
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Archive Confirmation Dialog */}
-      <Dialog open={archiveConfirmOpen} onOpenChange={setArchiveConfirmOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <Archive className="h-5 w-5 mr-2" />
-              Archive Case
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to archive the case "{caseData.name}"? You can unarchive it later if needed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline" 
-              className="sm:flex-1"
-              onClick={() => setArchiveConfirmOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              className="sm:flex-1"
-              onClick={handleArchiveCase}
-            >
-              Archive Case
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Notify Client Dialog */}
-      <Dialog open={notifyDialogOpen} onOpenChange={setNotifyDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <Send className="h-5 w-5 mr-2" />
-              Notify Client
-            </DialogTitle>
-            <DialogDescription>
-              Send a notification to {caseData.client || "the client"} regarding this case.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-2">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Subject
-              </label>
-              <Input
-                value={notificationSubject}
-                onChange={(e) => setNotificationSubject(e.target.value)}
-                placeholder="Case update regarding..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Message
-              </label>
-              <Textarea
-                value={notificationMessage}
-                onChange={(e) => setNotificationMessage(e.target.value)}
-                placeholder="Enter your message to the client..."
-                className="min-h-[100px]"
-              />
-            </div>
-          </div>
-          
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline" 
-              className="sm:flex-1"
-              onClick={() => setNotifyDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              className="sm:flex-1"
-              disabled={!notificationSubject || !notificationMessage}
-              onClick={handleSendNotification}
-            >
-              Send Notification
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Client Dialog */}
-      <Dialog open={clientDialogOpen} onOpenChange={setClientDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <Users className="h-5 w-5 mr-2" />
-              Add Client
-            </DialogTitle>
-            <DialogDescription>
-              Add client information to this case.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-2">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Client Name
-              </label>
-              <Input
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                placeholder="Enter client name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
-              <Input
-                value={clientEmail}
-                onChange={(e) => setClientEmail(e.target.value)}
-                placeholder="client@example.com"
-                type="email"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone Number
-              </label>
-              <Input
-                value={clientPhone}
-                onChange={(e) => setClientPhone(e.target.value)}
-                placeholder="(555) 123-4567"
-                type="tel"
-              />
-            </div>
-          </div>
-          
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline" 
-              className="sm:flex-1"
-              onClick={() => setClientDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              className="sm:flex-1"
-              disabled={!clientName}
-              onClick={handleAddClient}
-            >
-              Add Client
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </DashboardLayout>
-  );
-};
-
-export default CasePage;

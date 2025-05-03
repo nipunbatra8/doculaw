@@ -1,249 +1,129 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { User, Session } from "@supabase/supabase-js";
 
-interface Profile {
-  id: string;
-  name: string | null;
-  email: string | null;
-  title: string | null;
-  phone: string | null;
-  onboarding_completed: boolean | null;
-  referral_source: string | null;
-}
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
-  user: User | null;
-  profile: Profile | null;
-  isLoading: boolean;
   isAuthenticated: boolean;
+  isLoading: boolean;
+  user: User | null;
+  session: Session | null;
   needsOnboarding: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
-  logout: () => Promise<void>;
-  deleteAccount: () => Promise<void>;
-  updateProfile: (data: Partial<Profile>) => Promise<void>;
-  updateUserMetadata: (metadata: { name?: string; phone?: string; title?: string }) => Promise<void>;
+  setNeedsOnboarding: (value: boolean) => void;
+  signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  isAuthenticated: false,
+  isLoading: true,
+  user: null,
+  session: null,
+  needsOnboarding: true,
+  setNeedsOnboarding: () => {},
+  signOut: async () => {},
+});
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [needsOnboarding, setNeedsOnboarding] = useState(true);
+  
+  // Wrap the setNeedsOnboarding function to avoid re-renders
+  const updateNeedsOnboarding = (value: boolean) => {
+    setNeedsOnboarding(value);
+  };
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        setIsLoading(false);
+    const getSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
         
-        // Fetch user profile when auth state changes
-        if (currentSession?.user) {
-          fetchProfile(currentSession.user.id);
-        } else {
-          setProfile(null);
-          setNeedsOnboarding(false);
+        // Set session and authentication status
+        setSession(data.session);
+        setIsAuthenticated(!!data.session);
+        setUser(data.session?.user || null);
+        
+        // Check if user has completed onboarding
+        if (data.session?.user) {
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("onboarding_completed")
+            .eq("id", data.session.user.id)
+            .single();
+            
+          if (!profileError && profile) {
+            setNeedsOnboarding(!profile.onboarding_completed);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching session:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    getSession();
+
+    // Listen for auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setIsAuthenticated(!!session);
+      setUser(session?.user || null);
+      setSession(session);
+      
+      // Check onboarding status when auth state changes
+      if (session?.user) {
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("onboarding_completed")
+            .eq("id", session.user.id)
+            .single();
+            
+          if (!profileError && profile) {
+            setNeedsOnboarding(!profile.onboarding_completed);
+          }
+        } catch (error) {
+          console.error("Error checking onboarding status:", error);
         }
       }
-    );
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
       
-      if (currentSession?.user) {
-        fetchProfile(currentSession.user.id);
+      if (event === "SIGNED_OUT") {
+        setNeedsOnboarding(true);
       }
       
       setIsLoading(false);
     });
 
     return () => {
-      subscription.unsubscribe();
+      if (authListener) authListener.subscription.unsubscribe();
     };
   }, []);
 
-  // Check if user needs to complete onboarding
-  useEffect(() => {
-    if (user && profile) {
-      // If profile exists but onboarding is not completed, user needs to complete onboarding
-      setNeedsOnboarding(!profile.onboarding_completed);
-    } else if (user && !profile) {
-      // If user exists but profile doesn't exist, user needs to complete onboarding
-      setNeedsOnboarding(true);
-    }
-  }, [user, profile]);
-
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        // Profile doesn't exist, so user needs onboarding
-        setNeedsOnboarding(true);
-        return;
-      }
-
-      setProfile(data as Profile);
-      // Set onboarding flag based on profile status
-      setNeedsOnboarding(data ? !data.onboarding_completed : true);
-    } catch (error) {
-      console.error('Failed to fetch profile:', error);
-      setNeedsOnboarding(true);
-    }
-  };
-
-  const login = async (email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const signup = async (email: string, password: string, name: string) => {
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-          },
-        },
-      });
-      if (error) throw error;
-    } catch (error) {
-      console.error('Signup failed:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const logout = async () => {
+  const signOut = async () => {
     try {
       await supabase.auth.signOut();
+      setIsAuthenticated(false);
+      setUser(null);
+      setSession(null);
+      setNeedsOnboarding(true);
     } catch (error) {
-      console.error('Logout failed:', error);
-      throw error;
-    }
-  };
-
-  const deleteAccount = async () => {
-    if (!user) throw new Error('Not authenticated');
-    
-    try {
-      // First, delete user data from profiles table if it exists
-      // TODO
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', user.id);
-        
-      if (profileError) {
-        console.error('Error deleting profile:', profileError);
-        // Continue with account deletion even if profile deletion fails
-      }
-      
-      // In a production app, you would use a secure server-side endpoint or
-      // Supabase Edge Function to delete the user account, as the client SDK
-      // doesn't provide a direct method for users to delete their own accounts.
-      
-      // For this demo, we'll simulate account deletion by signing out
-      // and showing a success message to the user
-      await supabase.auth.signOut();
-      
-      // In a real implementation, you would make an API call to your backend:
-      // await fetch('/api/delete-account', {
-      //   method: 'DELETE',
-      //   headers: {
-      //     'Authorization': `Bearer ${session?.access_token}`
-      //   }
-      // });
-    } catch (error) {
-      console.error('Delete account failed:', error);
-      throw error;
-    }
-  };
-
-  const updateProfile = async (data: Partial<Profile>) => {
-    if (!user) throw new Error('Not authenticated');
-    
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(data)
-        .eq('id', user.id);
-
-      if (error) throw error;
-      
-      // Update local profile state
-      setProfile(prev => prev ? { ...prev, ...data } : null);
-      
-      // If onboarding was just completed, update the flag
-      if (data.onboarding_completed) {
-        setNeedsOnboarding(false);
-      }
-    } catch (error) {
-      console.error('Update profile failed:', error);
-      throw error;
-    }
-  };
-
-  const updateUserMetadata = async (metadata: { name?: string; phone?: string; title?: string }) => {
-    if (!user) throw new Error('Not authenticated');
-    
-    try {
-      const { error } = await supabase.auth.updateUser({
-        data: metadata
-      });
-
-      if (error) throw error;
-      
-      // Refresh the user data to include the updated metadata
-      const { data: { user: updatedUser } } = await supabase.auth.getUser();
-      if (updatedUser) {
-        setUser(updatedUser);
-      }
-    } catch (error) {
-      console.error('Update user metadata failed:', error);
-      throw error;
+      console.error("Error signing out:", error);
     }
   };
 
   return (
     <AuthContext.Provider
       value={{
-        user,
-        profile,
+        isAuthenticated,
         isLoading,
-        isAuthenticated: !!user,
+        user,
+        session,
         needsOnboarding,
-        login,
-        signup,
-        logout,
-        deleteAccount,
-        updateProfile,
-        updateUserMetadata,
+        setNeedsOnboarding: updateNeedsOnboarding,
+        signOut,
       }}
     >
       {children}
@@ -251,10 +131,4 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-};
+export const useAuth = () => useContext(AuthContext);
