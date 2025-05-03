@@ -1,5 +1,5 @@
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
@@ -8,9 +8,14 @@ interface Props {
 }
 
 const ProtectedRoute = ({ children }: Props) => {
-  const { isAuthenticated, isLoading, user, needsOnboarding } = useAuth();
+  const { isAuthenticated, isLoading, needsOnboarding } = useAuth();
   const location = useLocation();
 
+  // Allow access to reset-password page without authentication
+  if (location.pathname === "/reset-password") {
+    return <>{children}</>;
+  }
+  
   // Check if user is authenticated, not loading, and determine if they need to be redirected to onboarding
   if (!isLoading && !isAuthenticated) {
     // Not authenticated, redirect to login

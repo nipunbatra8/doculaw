@@ -15,6 +15,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
@@ -23,9 +30,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 // Form validation schemas for each step
 const personalInfoSchema = z.object({
+  email: z.string().email().optional(),
   name: z.string().min(2, { message: "Name must be at least 2 characters" }),
   title: z.string().optional(),
-  phone: z.string().optional(),
+  phone: z.string().min(5, { message: "Phone number is required" }),
 });
 
 const referralSchema = z.object({
@@ -60,6 +68,7 @@ export default function OnboardingPage() {
   const personalInfoForm = useForm<PersonalInfoValues>({
     resolver: zodResolver(personalInfoSchema),
     defaultValues: {
+      email: user?.email || "",
       name: user?.user_metadata?.name || "",
       title: user?.user_metadata?.title || "",
       phone: user?.user_metadata?.phone || "",
@@ -77,11 +86,12 @@ export default function OnboardingPage() {
 
   // Update form values when user data becomes available
   useEffect(() => {
-    if (user?.user_metadata) {
+    if (user) {
       personalInfoForm.reset({
-        name: user.user_metadata.name || "",
-        title: user.user_metadata.title || "",
-        phone: user.user_metadata.phone || "",
+        email: user.email || "",
+        name: user.user_metadata?.name || "",
+        title: user.user_metadata?.title || "",
+        phone: user.user_metadata?.phone || "",
       });
     }
   }, [user, personalInfoForm]);
@@ -117,7 +127,26 @@ export default function OnboardingPage() {
           ? `other: ${data.referralOther}`
           : data.referralSource;
 
-      // Update user profile with referral info and mark onboarding as completed
+      // Create or update profile in the profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user?.id,
+          email: user?.email,
+          name: user?.user_metadata?.name,
+          title: user?.user_metadata?.title,
+          phone: user?.user_metadata?.phone,
+          referral_source: referralSource,
+          onboarding_completed: true,
+        }, {
+          onConflict: 'id'
+        });
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      // Update user profile state
       await updateProfile({
         referral_source: referralSource,
         onboarding_completed: true,
@@ -213,6 +242,20 @@ export default function OnboardingPage() {
                     >
                       <FormField
                         control={personalInfoForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email Address</FormLabel>
+                            <FormControl>
+                              <Input {...field} disabled className="bg-gray-100 cursor-not-allowed" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={personalInfoForm.control}
                         name="name"
                         render={({ field }) => (
                           <FormItem>
@@ -244,9 +287,9 @@ export default function OnboardingPage() {
                         name="phone"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Phone Number</FormLabel>
+                            <FormLabel>Phone Number <span className="text-red-500">*</span></FormLabel>
                             <FormControl>
-                              <Input placeholder="e.g. (123) 456-7890" {...field} />
+                              <Input placeholder="e.g. (123) 456-7890" required {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -284,21 +327,26 @@ export default function OnboardingPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>How did you hear about DocuLaw?</FormLabel>
-                            <FormControl>
-                              <select
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                {...field}
-                              >
-                                <option value="" disabled>Select an option</option>
-                                <option value="search_engine">Search Engine</option>
-                                <option value="social_media">Social Media</option>
-                                <option value="friend_referral">Friend or Colleague</option>
-                                <option value="legal_association">Legal Association</option>
-                                <option value="advertisement">Advertisement</option>
-                                <option value="conference">Conference or Event</option>
-                                <option value="other">Other</option>
-                              </select>
-                            </FormControl>
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select an option" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="search_engine">Search Engine</SelectItem>
+                                <SelectItem value="social_media">Social Media</SelectItem>
+                                <SelectItem value="friend_referral">Friend or Colleague</SelectItem>
+                                <SelectItem value="legal_association">Legal Association</SelectItem>
+                                <SelectItem value="advertisement">Advertisement</SelectItem>
+                                <SelectItem value="conference">Conference or Event</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
