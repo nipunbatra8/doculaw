@@ -11,6 +11,11 @@ interface AuthContextType {
   needsOnboarding: boolean;
   setNeedsOnboarding: (value: boolean) => void;
   signOut: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>; // Alias for signOut for compatibility
+  updateUserMetadata: (metadata: { [key: string]: any }) => Promise<void>;
+  updateProfile: (data: { [key: string]: any }) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,6 +26,11 @@ const AuthContext = createContext<AuthContextType>({
   needsOnboarding: true,
   setNeedsOnboarding: () => {},
   signOut: async () => {},
+  login: async () => {},
+  logout: async () => {},
+  updateUserMetadata: async () => {},
+  updateProfile: async () => {},
+  deleteAccount: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -102,6 +112,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  const login = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (error) throw error;
+      
+    } catch (error) {
+      console.error("Error logging in:", error);
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -111,6 +136,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setNeedsOnboarding(true);
     } catch (error) {
       console.error("Error signing out:", error);
+    }
+  };
+  
+  // Alias for signOut for compatibility
+  const logout = signOut;
+
+  const updateUserMetadata = async (metadata: { [key: string]: any }) => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: metadata
+      });
+      
+      if (error) throw error;
+      
+      // Update local user state with new metadata
+      if (user) {
+        setUser({
+          ...user,
+          user_metadata: { ...user.user_metadata, ...metadata }
+        });
+      }
+    } catch (error) {
+      console.error("Error updating user metadata:", error);
+      throw error;
+    }
+  };
+
+  const updateProfile = async (data: { [key: string]: any }) => {
+    try {
+      if (!user) throw new Error("No user logged in");
+      
+      const { error } = await supabase
+        .from("profiles")
+        .update(data)
+        .eq("id", user.id);
+      
+      if (error) throw error;
+      
+      // If updating onboarding status, also update local state
+      if (data.hasOwnProperty('onboarding_completed')) {
+        setNeedsOnboarding(!data.onboarding_completed);
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      throw error;
+    }
+  };
+
+  const deleteAccount = async () => {
+    try {
+      // Delete user account
+      const { error } = await supabase.auth.admin.deleteUser(
+        user?.id as string
+      );
+      
+      if (error) throw error;
+      
+      // Sign out after deletion
+      await signOut();
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      throw error;
     }
   };
 
@@ -124,6 +211,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         needsOnboarding,
         setNeedsOnboarding: updateNeedsOnboarding,
         signOut,
+        login,
+        logout,
+        updateUserMetadata,
+        updateProfile,
+        deleteAccount,
       }}
     >
       {children}

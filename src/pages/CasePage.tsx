@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -115,9 +114,11 @@ const CasePage = () => {
       return {
         ...data,
         lastActivity: formatRelativeTime(data.updated_at),
-        caseNumber: data.complaint_data?.caseNumber || `CV-${new Date(data.created_at).getFullYear()}-${data.id.substring(0, 5)}`,
-        court: data.complaint_data?.court || getCourt(data.case_type),
-        filedDate: data.complaint_data?.filingDate ? format(parseISO(data.complaint_data.filingDate), 'MMM d, yyyy') : format(parseISO(data.created_at), 'MMM d, yyyy')
+        caseNumber: data.complaint_data && typeof data.complaint_data === 'object' ? data.complaint_data.caseNumber : `CV-${new Date(data.created_at).getFullYear()}-${data.id.substring(0, 5)}`,
+        court: data.complaint_data && typeof data.complaint_data === 'object' ? data.complaint_data.court : getCourt(data.case_type),
+        filedDate: data.complaint_data && typeof data.complaint_data === 'object' && data.complaint_data.filingDate ? 
+          format(parseISO(data.complaint_data.filingDate as string), 'MMM d, yyyy') : 
+          format(parseISO(data.created_at), 'MMM d, yyyy')
       };
     },
     enabled: !!user && !!caseId
@@ -704,7 +705,12 @@ const CasePage = () => {
                             <FileText className="h-5 w-5 text-blue-500 mr-3" />
                             <div>
                               <p className="font-medium">Criminal Complaint</p>
-                              <p className="text-sm text-gray-500">Case Number: {caseData.complaint_data?.caseNumber}</p>
+                              <p className="text-sm text-gray-500">Case Number: {
+                                caseData.complaint_data && 
+                                typeof caseData.complaint_data === 'object' ? 
+                                caseData.complaint_data.caseNumber : 
+                                caseData.caseNumber
+                              }</p>
                             </div>
                           </div>
                           <Button variant="ghost" size="sm">
