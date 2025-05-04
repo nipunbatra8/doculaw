@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -851,3 +852,11 @@ const CasePage = () => {
             <div className="flex-grow overflow-auto">
               <PdfEditor pdfUrl="https://courts.ca.gov/sites/default/files/courts/default/2024-11/disc001.pdf" />
             </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </DashboardLayout>
+  );
+};
+
+export default CasePage;
