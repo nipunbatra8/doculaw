@@ -35,6 +35,14 @@ import { format, parseISO } from "date-fns";
 import PdfEditor from "@/components/PdfEditor";
 import CriminalComplaintUploader from "@/components/upload/CriminalComplaintUploader";
 
+// Type for complaint data to avoid TypeScript errors
+interface ComplaintData {
+  caseNumber?: string;
+  court?: string;
+  filingDate?: string;
+  [key: string]: any;
+}
+
 // Type for case data from Supabase
 type CaseData = {
   id: string;
@@ -52,7 +60,7 @@ type CaseData = {
   court?: string;
   filedDate?: string;
   complaint_processed?: boolean;
-  complaint_data?: any;
+  complaint_data?: ComplaintData;
 };
 
 const CasePage = () => {
@@ -110,14 +118,17 @@ const CasePage = () => {
       
       if (!data) return null;
       
+      // Safely access complaint_data properties by typecasting
+      const complaintData = data.complaint_data as ComplaintData || {};
+      
       // Enhance data with additional UI fields
       return {
         ...data,
         lastActivity: formatRelativeTime(data.updated_at),
-        caseNumber: data.complaint_data && typeof data.complaint_data === 'object' ? data.complaint_data.caseNumber : `CV-${new Date(data.created_at).getFullYear()}-${data.id.substring(0, 5)}`,
-        court: data.complaint_data && typeof data.complaint_data === 'object' ? data.complaint_data.court : getCourt(data.case_type),
-        filedDate: data.complaint_data && typeof data.complaint_data === 'object' && data.complaint_data.filingDate ? 
-          format(parseISO(data.complaint_data.filingDate as string), 'MMM d, yyyy') : 
+        caseNumber: complaintData?.caseNumber || `CV-${new Date(data.created_at).getFullYear()}-${data.id.substring(0, 5)}`,
+        court: complaintData?.court || getCourt(data.case_type),
+        filedDate: complaintData?.filingDate ? 
+          format(parseISO(complaintData.filingDate), 'MMM d, yyyy') : 
           format(parseISO(data.created_at), 'MMM d, yyyy')
       };
     },
@@ -705,12 +716,7 @@ const CasePage = () => {
                             <FileText className="h-5 w-5 text-blue-500 mr-3" />
                             <div>
                               <p className="font-medium">Criminal Complaint</p>
-                              <p className="text-sm text-gray-500">Case Number: {
-                                caseData.complaint_data && 
-                                typeof caseData.complaint_data === 'object' ? 
-                                caseData.complaint_data.caseNumber : 
-                                caseData.caseNumber
-                              }</p>
+                              <p className="text-sm text-gray-500">Case Number: {(caseData.complaint_data as ComplaintData)?.caseNumber || caseData.caseNumber}</p>
                             </div>
                           </div>
                           <Button variant="ghost" size="sm">
