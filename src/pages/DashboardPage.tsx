@@ -1,4 +1,3 @@
-
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -34,27 +33,6 @@ const DashboardPage = () => {
       
       if (error) {
         console.error('Error fetching active cases count:', error);
-        return 0;
-      }
-      
-      return count || 0;
-    },
-    enabled: !!user
-  });
-
-  // Fetch active clients count
-  const { data: activeClientsCount = 0 } = useQuery({
-    queryKey: ['active-clients-count', user?.id],
-    queryFn: async () => {
-      if (!user) return 0;
-      
-      const { count, error } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact', head: true })
-        .eq('lawyer_id', user.id);
-      
-      if (error) {
-        console.error('Error fetching active clients count:', error);
         return 0;
       }
       
@@ -124,7 +102,7 @@ const DashboardPage = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">{activeClientsCount}</div>
+                <div className="text-3xl font-bold">18</div>
                 <Users className="h-6 w-6 text-doculaw-500" />
               </div>
               <div className="mt-2 text-xs text-gray-500">

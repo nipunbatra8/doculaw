@@ -14,8 +14,6 @@ export type Database = {
           archived_at: string | null
           case_type: string | null
           client: string | null
-          complaint_data: Json | null
-          complaint_processed: boolean | null
           created_at: string
           id: string
           name: string
@@ -27,8 +25,6 @@ export type Database = {
           archived_at?: string | null
           case_type?: string | null
           client?: string | null
-          complaint_data?: Json | null
-          complaint_processed?: boolean | null
           created_at?: string
           id?: string
           name: string
@@ -40,8 +36,6 @@ export type Database = {
           archived_at?: string | null
           case_type?: string | null
           client?: string | null
-          complaint_data?: Json | null
-          complaint_processed?: boolean | null
           created_at?: string
           id?: string
           name?: string
