@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -31,9 +30,11 @@ import {
   AlertTriangle,
   Download,
   Clock,
+  Upload,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import PdfEditor from "@/components/PdfEditor";
+import DocumentViewer from "@/components/discovery/DocumentViewer";
 
 // Type for case data from Supabase
 type CaseData = {
@@ -53,6 +54,23 @@ type CaseData = {
   filedDate?: string;
 };
 
+// Add this type definition for documents
+interface Document {
+  id: string;
+  user_id: string;
+  case_id: string | null;
+  name: string;
+  path: string;
+  url: string;
+  type: string;
+  size: number;
+  extracted_text: string | null;
+  created_at: string;
+  updated_at: string | null;
+  // For documents from storage that aren't in the database
+  fromStorage?: boolean;
+}
+
 const CasePage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
@@ -66,6 +84,8 @@ const CasePage = () => {
   const [notifyDialogOpen, setNotifyDialogOpen] = useState<boolean>(false);
   const [clientDialogOpen, setClientDialogOpen] = useState<boolean>(false);
   const [showPdfEditor, setShowPdfEditor] = useState<boolean>(false);
+  const [viewingDocumentId, setViewingDocumentId] = useState<string | null>(null);
+  const [showDocumentViewer, setShowDocumentViewer] = useState<boolean>(false);
   
   // Client form
   const [clientName, setClientName] = useState<string>("");
@@ -583,63 +603,25 @@ const CasePage = () => {
           
           <TabsContent value="documents" className="space-y-4">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Case Documents</CardTitle>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => navigate(`/discovery-request/${caseId}`)}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload New Document
+                </Button>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="font-medium text-gray-800 mb-3">Discovery Documents</h3>
-                    <div className="border rounded-md divide-y">
-                      <div className="p-4 flex items-center justify-between hover:bg-gray-50">
-                        <div className="flex items-center">
-                          <FileText className="h-5 w-5 text-blue-500 mr-3" />
-                          <div>
-                            <p className="font-medium">Form Interrogatories</p>
-                            <p className="text-sm text-gray-500">Sent: May 15, 2023</p>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="p-4 flex items-center justify-between hover:bg-gray-50">
-                        <div className="flex items-center">
-                          <FileText className="h-5 w-5 text-blue-500 mr-3" />
-                          <div>
-                            <p className="font-medium">Request for Production</p>
-                            <p className="text-sm text-gray-500">Sent: June 2, 2023</p>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="p-4 flex items-center justify-between hover:bg-gray-50">
-                        <div className="flex items-center">
-                          <FileText className="h-5 w-5 text-blue-500 mr-3" />
-                          <div>
-                            <p className="font-medium">Request for Admissions</p>
-                            <p className="text-sm text-gray-500">Sent: June 10, 2023</p>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="font-medium text-gray-800 mb-3">Court Filings</h3>
-                    <div className="border rounded-md p-6 text-center text-gray-500">
-                      <p>No court filings have been uploaded yet.</p>
-                      <Button variant="outline" className="mt-4">
-                        Upload Court Filing
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                <CaseDocuments 
+                  caseId={caseId} 
+                  onViewDocument={(documentId) => {
+                    setViewingDocumentId(documentId);
+                    setShowDocumentViewer(true);
+                  }}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -962,7 +944,383 @@ const CasePage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Document Viewer */}
+      <DocumentViewer
+        documentId={viewingDocumentId}
+        caseId={caseId}
+        open={showDocumentViewer}
+        onClose={() => {
+          setShowDocumentViewer(false);
+          setViewingDocumentId(null);
+        }}
+      />
     </DashboardLayout>
+  );
+};
+
+// CaseDocuments component
+const CaseDocuments = ({ 
+  caseId, 
+  onViewDocument 
+}: { 
+  caseId: string | undefined;
+  onViewDocument: (documentId: string) => void;
+}) => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  
+  const getSignedUrl = async (filePath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('doculaw')
+        .createSignedUrl(filePath, 3600);
+      
+      if (error) throw error;
+      return data.signedUrl;
+    } catch (error) {
+      console.error('Error getting signed URL:', error);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (!user || !caseId) return;
+    
+    const fetchDocuments = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch database records first
+        const { data: dbDocuments, error: dbError } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('case_id', caseId)
+          .order('created_at', { ascending: false });
+        
+        if (dbError) throw dbError;
+        
+        // Also check the storage bucket directly
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from('doculaw')
+          .list(`cases/${caseId}`, {
+            sortBy: { column: 'name', order: 'desc' }
+          });
+        
+        if (storageError) throw storageError;
+        
+        // Create document objects for storage files that aren't in the database
+        const dbPaths = new Set((dbDocuments || []).map(doc => doc.path));
+        const storageDocuments: Document[] = [];
+        
+        for (const item of storageData || []) {
+          if (!item.id || item.id === '.emptyFolderPlaceholder') continue;
+          
+          const filePath = `cases/${caseId}/${item.name}`;
+          
+          // Skip if this file is already in the database
+          if (dbPaths.has(filePath)) continue;
+          
+          // Get a signed URL for the file
+          const signedUrl = await getSignedUrl(filePath);
+          
+          if (!signedUrl) continue;
+          
+          // Create a document object
+          storageDocuments.push({
+            id: item.id,
+            user_id: user.id,
+            case_id: caseId,
+            name: item.name,
+            path: filePath,
+            url: signedUrl,
+            type: getFileType(item.name),
+            size: item.metadata?.size || 0,
+            extracted_text: null,
+            created_at: item.created_at || new Date().toISOString(),
+            updated_at: null,
+            fromStorage: true
+          });
+        }
+        
+        // Get signed URLs for database documents as well
+        const dbDocumentsWithSignedUrls = await Promise.all((dbDocuments || []).map(async (doc) => {
+          const signedUrl = await getSignedUrl(doc.path);
+          return {
+            ...doc,
+            url: signedUrl || doc.url // Fall back to stored URL if signed URL fails
+          };
+        }));
+        
+        // Merge database and storage documents
+        setDocuments([...dbDocumentsWithSignedUrls, ...storageDocuments]);
+      } catch (error) {
+        console.error('Error fetching documents:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load documents. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchDocuments();
+  }, [user, caseId, toast]);
+  
+  // Helper function to determine file type from filename
+  const getFileType = (fileName: string) => {
+    const lowerName = fileName.toLowerCase();
+    if (lowerName.includes('complaint')) {
+      return 'complaint';
+    } else if (lowerName.includes('interrogator')) {
+      return 'interrogatories';
+    } else if (lowerName.includes('admission')) {
+      return 'admissions';
+    } else if (lowerName.includes('production')) {
+      return 'production';
+    } else {
+      return 'document';
+    }
+  };
+  
+  const handleDeleteDocument = async () => {
+    if (!documentToDelete || !user || !caseId) return;
+    
+    try {
+      // Find the document
+      const docToDelete = documents.find(doc => doc.id === documentToDelete);
+      if (!docToDelete) throw new Error("Document not found");
+      
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from('doculaw')
+        .remove([docToDelete.path]);
+        
+      if (storageError) throw storageError;
+      
+      // If it's in the database (not just storage), delete from database too
+      if (!docToDelete.fromStorage) {
+        const { error: deleteError } = await supabase
+          .from('documents')
+          .delete()
+          .eq('id', documentToDelete);
+          
+        if (deleteError) throw deleteError;
+      }
+      
+      toast({
+        title: "Document Deleted",
+        description: "The document has been removed from this case."
+      });
+      
+      // Update the UI by removing the deleted document
+      setDocuments(documents.filter(doc => doc.id !== documentToDelete));
+      setDocumentToDelete(null);
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete the document. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Add or update document in database (for storage-only files)
+  const handleImportDocument = async (doc: Document) => {
+    if (!user || !caseId || !doc.fromStorage) return;
+    
+    try {
+      // Try to extract text if needed
+      let extractedText = null;
+      
+      try {
+        // Download the file from storage
+        const { data, error } = await supabase.storage
+          .from('doculaw')
+          .download(doc.path);
+          
+        if (error) throw error;
+        
+        // Use pdf-to-text to extract text
+        const file = new File([data], doc.name, { type: 'application/pdf' });
+        const pdfToText = (await import('react-pdftotext')).default;
+        extractedText = await pdfToText(file);
+      } catch (extractError) {
+        console.error('Error extracting text:', extractError);
+        // Continue even if text extraction fails
+      }
+      
+      // Add to database
+      const { data: insertData, error: insertError } = await supabase
+        .from('documents')
+        .insert({
+          user_id: user.id,
+          case_id: caseId,
+          name: doc.name,
+          path: doc.path,
+          url: doc.url,
+          type: doc.type,
+          size: doc.size,
+          extracted_text: extractedText,
+          created_at: new Date().toISOString()
+        })
+        .select('*')
+        .single();
+      
+      if (insertError) throw insertError;
+      
+      // Update documents list
+      setDocuments(prevDocs => 
+        prevDocs.map(d => d.id === doc.id ? { ...insertData, fromStorage: false } : d)
+      );
+      
+      toast({
+        title: "Document Imported",
+        description: "The document has been added to the database."
+      });
+    } catch (error) {
+      console.error('Error importing document:', error);
+      toast({
+        title: "Error",
+        description: "Failed to import the document. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Rest of the component with minor updates to support storage files
+  if (isLoading) {
+    return (
+      <div className="animate-pulse space-y-4">
+        <div className="h-16 bg-gray-200 rounded"></div>
+        <div className="h-16 bg-gray-200 rounded"></div>
+      </div>
+    );
+  }
+  
+  if (documents.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h3 className="font-medium text-gray-800 mb-3">Documents</h3>
+          <div className="border rounded-md p-6 text-center text-gray-500">
+            <p>No documents have been uploaded to this case yet.</p>
+            <Button 
+              variant="outline" 
+              className="mt-4"
+              onClick={() => navigate(`/discovery-request/${caseId}`)}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Document
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-medium text-gray-800 mb-3">All Case Documents</h3>
+        <div className="border rounded-md divide-y">
+          {documents.map((doc) => (
+            <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+              <div className="flex items-center">
+                <FileText className="h-5 w-5 text-blue-500 mr-3" />
+                <div>
+                  <div className="flex items-center">
+                    <p className="font-medium">{doc.name}</p>
+                    {doc.fromStorage && (
+                      <Badge variant="outline" className="ml-2 text-amber-600 bg-amber-50">
+                        Storage Only
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Uploaded: {format(parseISO(doc.created_at), 'MMM d, yyyy')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                {doc.fromStorage ? (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleImportDocument(doc)}
+                    title="Import to database"
+                  >
+                    <FileText className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => onViewDocument(doc.id)}
+                    title="View and Edit Document"
+                  >
+                    <FileText className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => window.open(doc.url, '_blank')}
+                  title="Download Document"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setDocumentToDelete(doc.id)}
+                  title="Delete Document"
+                >
+                  <Trash2 className="h-4 w-4 text-red-500" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!documentToDelete} onOpenChange={() => setDocumentToDelete(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center">
+              <AlertTriangle className="h-5 w-5 mr-2" />
+              Delete Document
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this document? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline" 
+              className="sm:flex-1"
+              onClick={() => setDocumentToDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              className="sm:flex-1"
+              onClick={handleDeleteDocument}
+            >
+              Delete Document
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 

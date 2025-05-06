@@ -45,6 +45,61 @@ export type Database = {
         }
         Relationships: []
       }
+      documents: {
+        Row: {
+          id: string
+          user_id: string
+          case_id: string | null
+          name: string
+          path: string
+          url: string
+          type: string
+          size: number
+          extracted_text: string | null
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          case_id?: string | null
+          name: string
+          path: string
+          url: string
+          type: string
+          size: number
+          extracted_text?: string | null
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          case_id?: string | null
+          name?: string
+          path?: string
+          url?: string
+          type?: string
+          size?: number
+          extracted_text?: string | null
+          created_at?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_case_id_fkey"
+            columns: ["case_id"]
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       clients: {
         Row: {
           case_type: string | null

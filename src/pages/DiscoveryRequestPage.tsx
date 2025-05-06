@@ -41,6 +41,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { format, parseISO } from "date-fns";
 import { extractComplaintInformation, generateDiscoveryDocument, ComplaintInformation } from "@/integrations/gemini/client";
+import { Textarea } from "@/components/ui/textarea";
 
 // Define the CaseData type for our query result
 type CaseData = {
@@ -155,7 +156,8 @@ const DiscoveryRequestPage = () => {
     enabled: !!user && !!caseId
   });
 
-  const handleFileUploaded = async (fileUrl: string, fileText: string) => {
+  // Handler for file upload
+  const handleFileUploaded = async (fileUrl: string, fileText: string, fileName: string) => {
     setUploadedFileUrl(fileUrl);
     
     // Extract information from the uploaded document using Gemini API
@@ -489,7 +491,11 @@ const DiscoveryRequestPage = () => {
             
             <Card className="mt-6">
               <CardContent className="pt-6 pb-6">
-                <DocumentUploader onFileUploaded={handleFileUploaded} />
+                <DocumentUploader 
+                  onFileUploaded={handleFileUploaded} 
+                  caseId={caseId}
+                  documentType="Complaint"
+                />
               </CardContent>
             </Card>
             
@@ -596,36 +602,85 @@ const DiscoveryRequestPage = () => {
           <DialogHeader>
             <DialogTitle>Confirm Extracted Information</DialogTitle>
             <DialogDescription>
-              We've extracted the following information from the uploaded complaint. Please verify it's correct.
+              We've extracted the following information from the uploaded complaint. Please verify or edit it.
             </DialogDescription>
           </DialogHeader>
           
           {extractedData && (
             <div className="space-y-4 py-2">
-              <div className="grid grid-cols-1 gap-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Defendant:</span>
-                  <span className="font-medium">{extractedData.defendant}</span>
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Defendant
+                  </label>
+                  <Input
+                    value={extractedData.defendant}
+                    onChange={(e) => setExtractedData({
+                      ...extractedData,
+                      defendant: e.target.value
+                    })}
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Plaintiff:</span>
-                  <span className="font-medium">{extractedData.plaintiff}</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Plaintiff
+                  </label>
+                  <Input
+                    value={extractedData.plaintiff}
+                    onChange={(e) => setExtractedData({
+                      ...extractedData,
+                      plaintiff: e.target.value
+                    })}
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Case Number:</span>
-                  <span className="font-medium">{extractedData.caseNumber}</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Case Number
+                  </label>
+                  <Input
+                    value={extractedData.caseNumber}
+                    onChange={(e) => setExtractedData({
+                      ...extractedData,
+                      caseNumber: e.target.value
+                    })}
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Filing Date:</span>
-                  <span className="font-medium">{extractedData.filingDate}</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Filing Date
+                  </label>
+                  <Input
+                    value={extractedData.filingDate}
+                    onChange={(e) => setExtractedData({
+                      ...extractedData,
+                      filingDate: e.target.value
+                    })}
+                  />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Court:</span>
-                  <span className="font-medium">{extractedData.courtName}</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Court
+                  </label>
+                  <Input
+                    value={extractedData.courtName}
+                    onChange={(e) => setExtractedData({
+                      ...extractedData,
+                      courtName: e.target.value
+                    })}
+                  />
                 </div>
-                <div className="pt-2">
-                  <span className="text-gray-500">Charge Description:</span>
-                  <p className="font-medium mt-1">{extractedData.chargeDescription}</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Charge Description
+                  </label>
+                  <Textarea
+                    value={extractedData.chargeDescription}
+                    onChange={(e) => setExtractedData({
+                      ...extractedData,
+                      chargeDescription: e.target.value
+                    })}
+                    className="min-h-[80px]"
+                  />
                 </div>
               </div>
             </div>

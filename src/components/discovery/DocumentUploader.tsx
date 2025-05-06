@@ -7,10 +7,12 @@ import { useAuth } from "@/context/AuthContext";
 import pdfToText from 'react-pdftotext';
 
 interface DocumentUploaderProps {
-  onFileUploaded: (fileUrl: string, fileText: string) => void;
+  onFileUploaded: (fileUrl: string, fileText: string, fileName: string) => void;
+  caseId?: string;
+  documentType?: string; // Optional document type for better file naming
 }
 
-const DocumentUploader = ({ onFileUploaded }: DocumentUploaderProps) => {
+const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUploaderProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
@@ -45,6 +47,27 @@ const DocumentUploader = ({ onFileUploaded }: DocumentUploaderProps) => {
       setFile(selectedFile);
     }
   };
+
+  // Helper function to determine file type for naming
+  const getFileType = (fileName: string, docType?: string) => {
+    if (docType) {
+      return docType.toLowerCase().replace(/\s+/g, '_');
+    }
+    
+    // Try to determine from filename
+    const lowerName = fileName.toLowerCase();
+    if (lowerName.includes('complaint')) {
+      return 'complaint';
+    } else if (lowerName.includes('interrogator')) {
+      return 'interrogatories';
+    } else if (lowerName.includes('admission')) {
+      return 'admissions';
+    } else if (lowerName.includes('production')) {
+      return 'production';
+    } else {
+      return 'document';
+    }
+  };
   
   const handleUpload = async () => {
     if (!file || !user) return;
@@ -74,8 +97,56 @@ const DocumentUploader = ({ onFileUploaded }: DocumentUploaderProps) => {
       // Extraction is complete
       setExtractionProgress(100);
       
-      // In a real application, you'd upload the file to Supabase storage
-      const mockFileUrl = `https://storage.example.com/documents/${file.name}`;
+      // Upload file to Supabase storage with improved naming
+      const timestamp = new Date().getTime();
+      const fileType = getFileType(file.name, documentType);
+      let filePath = '';
+      let displayName = file.name;
+      
+      if (caseId) {
+        // Structure: cases/[case_id]/[file_type]_[timestamp].pdf
+        const fileExtension = file.name.split('.').pop() || 'pdf';
+        displayName = `${fileType}_${timestamp}.${fileExtension}`;
+        filePath = `cases/${caseId}/${displayName}`;
+      } else {
+        // Fallback for documents not associated with a case yet
+        filePath = `documents/${user.id}/${timestamp}_${file.name}`;
+      }
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('doculaw')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (uploadError) {
+        throw new Error(`Upload error: ${uploadError.message}`);
+      }
+      
+      // Get a signed URL for the file (valid for 1 hour)
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from('doculaw')
+        .createSignedUrl(filePath, 3600);
+      
+      if (signedUrlError) {
+        throw new Error(`Signed URL error: ${signedUrlError.message}`);
+      }
+      
+      // Save document metadata to Supabase
+      await supabase
+        .from('documents')
+        .insert({
+          user_id: user.id,
+          case_id: caseId || null,
+          name: displayName,
+          path: filePath,
+          url: signedUrlData.signedUrl,
+          type: fileType,
+          size: file.size,
+          extracted_text: extractedText,
+          created_at: new Date().toISOString()
+        });
       
       // Simulate upload completion
       clearInterval(simulateProgress);
@@ -83,12 +154,12 @@ const DocumentUploader = ({ onFileUploaded }: DocumentUploaderProps) => {
       
       toast({
         title: "Upload successful",
-        description: "Your complaint document has been uploaded and processed.",
+        description: "Your document has been uploaded and processed.",
       });
       
       setTimeout(() => {
         // Pass both the file URL and the extracted text to the parent component
-        onFileUploaded(mockFileUrl, extractedText);
+        onFileUploaded(signedUrlData.signedUrl, extractedText, displayName);
         setUploading(false);
         setFile(null);
         setUploadProgress(0);
@@ -99,7 +170,7 @@ const DocumentUploader = ({ onFileUploaded }: DocumentUploaderProps) => {
       console.error("Error processing PDF:", error);
       toast({
         title: "Processing failed",
-        description: "There was an error extracting text from your PDF. Please try again.",
+        description: "There was an error uploading or processing your PDF. Please try again.",
         variant: "destructive",
       });
       setUploading(false);
