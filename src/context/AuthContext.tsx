@@ -91,19 +91,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) {
         console.error('Error fetching profile:', error);
-        // Profile doesn't exist, so user needs onboarding
-        setNeedsOnboarding(true);
+        // Only set needsOnboarding to true if it's a "not found" error
+        if (error.code === 'PGRST116') {
+          setNeedsOnboarding(true);
+        } else {
+          // For other errors, don't change the onboarding state
+          console.error('Database error when fetching profile:', error);
+        }
         return;
       }
 
       setProfile(data as Profile);
       // Set onboarding flag based on profile status
       setNeedsOnboarding(data ? !data.onboarding_completed : true);
+
+      // Store onboarding status in localStorage for persistence across refreshes
+      if (data && data.onboarding_completed) {
+        localStorage.setItem(`doculaw_onboarding_${userId}`, 'completed');
+      }
     } catch (error) {
       console.error('Failed to fetch profile:', error);
-      setNeedsOnboarding(true);
+      // Don't automatically set needsOnboarding for unexpected errors
     }
   };
+
+  // Use cached onboarding status while profile is being fetched
+  useEffect(() => {
+    if (user && isLoading) {
+      const cachedOnboardingStatus = localStorage.getItem(`doculaw_onboarding_${user.id}`);
+      if (cachedOnboardingStatus === 'completed') {
+        setNeedsOnboarding(false);
+      }
+    }
+  }, [user, isLoading]);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
@@ -199,9 +219,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Update local profile state
       setProfile(prev => prev ? { ...prev, ...data } : null);
       
-      // If onboarding was just completed, update the flag
+      // If onboarding was just completed, update the flag and localStorage
       if (data.onboarding_completed) {
         setNeedsOnboarding(false);
+        localStorage.setItem(`doculaw_onboarding_${user.id}`, 'completed');
       }
     } catch (error) {
       console.error('Update profile failed:', error);

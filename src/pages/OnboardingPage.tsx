@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -107,10 +106,10 @@ export default function OnboardingPage() {
       });
       
       setStep(2);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to save information. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to save information. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -152,6 +151,11 @@ export default function OnboardingPage() {
         onboarding_completed: true,
       });
       
+      // Directly update localStorage as an extra safeguard
+      if (user?.id) {
+        localStorage.setItem(`doculaw_onboarding_${user.id}`, 'completed');
+      }
+      
       toast({
         title: "Setup completed",
         description: "Your profile has been set up successfully!",
@@ -159,10 +163,10 @@ export default function OnboardingPage() {
       
       // Redirect to dashboard
       navigate("/dashboard");
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to save information. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to save information. Please try again.",
         variant: "destructive",
       });
     } finally {
