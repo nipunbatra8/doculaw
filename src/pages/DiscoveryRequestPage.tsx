@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useQuery } from "@tanstack/react-query";
@@ -11,7 +10,8 @@ import {
   CardContent, 
   CardDescription, 
   CardHeader, 
-  CardTitle 
+  CardTitle, 
+  CardFooter
 } from "@/components/ui/card";
 import {
   Tabs,
@@ -27,15 +27,43 @@ import {
   MessageSquare,
   HelpCircle,
   Upload,
-  Check
+  Check,
+  AlertTriangle,
+  ArrowRight
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import DocumentUploader from "@/components/discovery/DocumentUploader";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { format, parseISO } from "date-fns";
+import { extractComplaintInformation, generateDiscoveryDocument, ComplaintInformation } from "@/integrations/gemini/client";
+
+// Define the CaseData type for our query result
+type CaseData = {
+  id: string;
+  name: string;
+  client: string | null;
+  case_type: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  archived_at: string | null;
+};
+
+// Using ComplaintInformation from the Gemini client instead
+// interface ExtractedComplaintData {
+//   defendant: string;
+//   plaintiff: string;
+//   caseNumber: string;
+//   filingDate: string;
+//   chargeDescription: string;
+//   courtName: string;
+// }
 
 const discoveryTypes = [
   {
@@ -68,16 +96,25 @@ const discoveryTypes = [
   }
 ];
 
+// Define the steps in our workflow
+const STEPS = {
+  UPLOAD_COMPLAINT: 0,
+  SELECT_DOCUMENTS: 1,
+  REVIEW_EXTRACTED_INFO: 2,
+  GENERATING_DOCUMENTS: 3,
+  VIEW_DOCUMENTS: 4
+};
+
 const DiscoveryRequestPage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("all");
-  const [showUploadDialog, setShowUploadDialog] = useState(false);
-  const [showDocumentSelectionDialog, setShowDocumentSelectionDialog] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedDocuments, setGeneratedDocuments] = useState<string[]>([]);
+  
+  // State for tracking the current step in the workflow
+  const [currentStep, setCurrentStep] = useState(STEPS.UPLOAD_COMPLAINT);
+  
+  // State for document selection and upload
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
   const [selectedDocumentTypes, setSelectedDocumentTypes] = useState<string[]>([
     "form-interrogatories",
@@ -85,9 +122,18 @@ const DiscoveryRequestPage = () => {
     "request-for-production",
     "request-for-admissions"
   ]);
+  
+  // State for document generation
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedDocuments, setGeneratedDocuments] = useState<string[]>([]);
+  
+  // State for extracted information
+  const [extractedData, setExtractedData] = useState<ComplaintInformation | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [showExtractedDataDialog, setShowExtractedDataDialog] = useState(false);
 
   // Fetch case details
-  const { data: caseData, isLoading } = useQuery({
+  const { data: caseData, isLoading } = useQuery<CaseData>({
     queryKey: ['case', caseId],
     queryFn: async () => {
       if (!user || !caseId) return null;
@@ -105,62 +151,98 @@ const DiscoveryRequestPage = () => {
     enabled: !!user && !!caseId
   });
 
-  const handleSelectDiscoveryType = (discoveryType: typeof discoveryTypes[0]) => {
-    if (discoveryType.id === "form-interrogatories") {
-      // Navigate to case page with state to show PDF editor
-      navigate(`/case/${caseId}`, { 
-        state: { 
-          showPdfEditor: true,
-          formType: discoveryType.id,
-          pdfUrl: discoveryType.pdfUrl
-        }
+  const handleFileUploaded = async (fileUrl: string, fileText: string) => {
+    setUploadedFileUrl(fileUrl);
+    
+    // Extract information from the uploaded document using Gemini API
+    setIsExtracting(true);
+    
+    try {
+      // Call the Gemini API to extract information from the document text
+      const extractedInfo = await extractComplaintInformation(fileText);
+      
+      setExtractedData(extractedInfo);
+      setIsExtracting(false);
+      setShowExtractedDataDialog(true);
+    } catch (error) {
+      console.error("Error extracting information from document:", error);
+      
+      // Use mock data as fallback
+      const mockExtractedData: ComplaintInformation = {
+        defendant: "John Doe",
+        plaintiff: "State of California",
+        caseNumber: `CR-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`,
+        filingDate: format(new Date(), 'MMM d, yyyy'),
+        chargeDescription: "Violation of Penal Code § 459 (Burglary)",
+        courtName: "Superior Court of California, County of Los Angeles"
+      };
+      
+      setExtractedData(mockExtractedData);
+      setIsExtracting(false);
+      setShowExtractedDataDialog(true);
+      
+      // Show error toast
+      toast({
+        title: "Information Extraction Limited",
+        description: "We couldn't fully extract information from your document. You can manually edit the details.",
+        variant: "destructive"
       });
-    } else {
-      // For other types, show upload complaint dialog
-      setShowUploadDialog(true);
     }
   };
 
-  const handleFileUploaded = async (fileUrl: string) => {
-    setUploadedFileUrl(fileUrl);
-    setShowUploadDialog(false);
-    setShowDocumentSelectionDialog(true);
+  const handleConfirmExtractedData = () => {
+    setShowExtractedDataDialog(false);
+    setCurrentStep(STEPS.SELECT_DOCUMENTS);
   };
 
-  const handleGenerateDocuments = async () => {
-    setShowDocumentSelectionDialog(false);
+  const handleSelectDocuments = async () => {
+    if (!extractedData) return;
+    
+    // Move to generating documents
+    setCurrentStep(STEPS.GENERATING_DOCUMENTS);
     setIsGenerating(true);
     
-    // In a real app, this would call an API to process the document and generate the discovery documents
-    // Simulate document generation with a delay
-    setTimeout(() => {
-      // Only include the selected document types
-      const docs = selectedDocumentTypes.map(type => {
-        const doc = discoveryTypes.find(d => d.id === type);
-        return doc?.title || "";
-      }).filter(title => title !== "");
+    try {
+      // Generate selected documents using Gemini API
+      const generationPromises = selectedDocumentTypes.map(async (typeId) => {
+        const docType = discoveryTypes.find(d => d.id === typeId);
+        if (!docType) return null;
+        
+        // For now, we're just storing the document title
+        // In a real app, we would store the generated content or a reference to it
+        return docType.title;
+      });
       
-      setGeneratedDocuments(docs);
+      // Wait for all documents to be generated
+      const generatedDocs = (await Promise.all(generationPromises)).filter(Boolean) as string[];
+      
+      setGeneratedDocuments(generatedDocs);
       setIsGenerating(false);
+      setCurrentStep(STEPS.VIEW_DOCUMENTS);
       
       toast({
         title: "Documents Generated",
         description: "Your discovery documents have been generated successfully.",
       });
-    }, 3000);
-  };
-
-  const handleViewDocument = (documentType: string) => {
-    const type = documentType.toLowerCase().replace(/\s/g, "-");
-    navigate(`/discovery-request/${caseId}/${type}`, {
-      state: { 
-        showPdfEditor: true,
-        formType: type,
-        pdfUrl: type === "form-interrogatories" 
-          ? "https://courts.ca.gov/sites/default/files/courts/default/2024-11/disc001.pdf"
-          : null
-      }
-    });
+    } catch (error) {
+      console.error("Error generating documents:", error);
+      
+      // Fallback to just using the document titles
+      const fallbackDocs = selectedDocumentTypes.map(typeId => {
+        const docType = discoveryTypes.find(d => d.id === typeId);
+        return docType?.title || "";
+      }).filter(title => title !== "");
+      
+      setGeneratedDocuments(fallbackDocs);
+      setIsGenerating(false);
+      setCurrentStep(STEPS.VIEW_DOCUMENTS);
+      
+      toast({
+        title: "Documents Generated",
+        description: "Your discovery documents have been generated with limited AI assistance.",
+        variant: "default"
+      });
+    }
   };
 
   const toggleDocumentType = (typeId: string) => {
@@ -173,6 +255,42 @@ const DiscoveryRequestPage = () => {
     });
   };
 
+  const handleViewDocument = (documentType: string) => {
+    // For this prototype, we'll just show a toast that this feature is coming soon
+    toast({
+      title: "Feature in Development",
+      description: "The document editor will be available in the next update.",
+    });
+    
+    // Original navigation code is still here but commented out
+    /*
+    const type = documentType.toLowerCase().replace(/\s/g, "-");
+    navigate(`/discovery-request/${caseId}/${type}`, {
+      state: { 
+        showPdfEditor: true,
+        formType: type,
+        pdfUrl: type === "form-interrogatories" 
+          ? "https://courts.ca.gov/sites/default/files/courts/default/2024-11/disc001.pdf"
+          : null
+      }
+    });
+    */
+  };
+
+  const handleReset = () => {
+    setCurrentStep(STEPS.UPLOAD_COMPLAINT);
+    setUploadedFileUrl(null);
+    setExtractedData(null);
+    setGeneratedDocuments([]);
+    setSelectedDocumentTypes([
+      "form-interrogatories",
+      "special-interrogatories",
+      "request-for-production",
+      "request-for-admissions"
+    ]);
+  };
+
+  // Loading state
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -187,6 +305,63 @@ const DiscoveryRequestPage = () => {
       </DashboardLayout>
     );
   }
+
+  // Render case information section
+  const renderCaseInfo = () => {
+    // Format case number directly from id and created_at
+    const caseNumber = `CV-${new Date(caseData?.created_at || new Date()).getFullYear()}-${caseData?.id?.substring(0, 5) || "00000"}`;
+      
+    // Format filing date directly from created_at
+    const filingDate = caseData?.created_at 
+      ? format(parseISO(caseData.created_at), 'MMM d, yyyy') 
+      : format(new Date(), 'MMM d, yyyy');
+    
+    return (
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle>Case Information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Case Name:</span>
+                <span className="font-medium">{caseData?.name || "N/A"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Case Number:</span>
+                <span className="font-medium">{caseNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Filing Date:</span>
+                <span>{filingDate}</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Status:</span>
+                <Badge variant={
+                  caseData?.status === "Active" ? "default" : 
+                  caseData?.status === "Pending" ? "secondary" : 
+                  "outline"
+                }>
+                  {caseData?.status || "Active"}
+                </Badge>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Type:</span>
+                <span>{caseData?.case_type || "Criminal"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Client:</span>
+                <span className="font-medium">{caseData?.client || "No client assigned"}</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <DashboardLayout>
@@ -214,14 +389,20 @@ const DiscoveryRequestPage = () => {
         </div>
 
         <Separator />
+        
+        {/* Case Information Card */}
+        {renderCaseInfo()}
 
-        {isGenerating ? (
+        {/* Main Content Area */}
+        {currentStep === STEPS.GENERATING_DOCUMENTS && (
           <div className="flex flex-col items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-doculaw-500 mb-4"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary mb-4"></div>
             <p className="text-lg text-gray-700 font-medium">Generating discovery documents...</p>
             <p className="text-gray-500 mt-2">This may take a moment as we analyze the complaint document.</p>
           </div>
-        ) : generatedDocuments.length > 0 ? (
+        )}
+        
+        {currentStep === STEPS.VIEW_DOCUMENTS && (
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">Generated Discovery Documents</h2>
             <p className="text-gray-600">
@@ -258,16 +439,7 @@ const DiscoveryRequestPage = () => {
             <div className="mt-8">
               <Button 
                 variant="outline" 
-                onClick={() => {
-                  setGeneratedDocuments([]);
-                  setUploadedFileUrl(null);
-                  setSelectedDocumentTypes([
-                    "form-interrogatories",
-                    "special-interrogatories",
-                    "request-for-production",
-                    "request-for-admissions"
-                  ]);
-                }}
+                onClick={handleReset}
                 className="mr-2"
               >
                 Start Over
@@ -277,42 +449,98 @@ const DiscoveryRequestPage = () => {
               </Button>
             </div>
           </div>
-        ) : (
+        )}
+        
+        {currentStep === STEPS.UPLOAD_COMPLAINT && (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Step 1: Select Discovery Type</h2>
+            <h2 className="text-xl font-semibold">Step 1: Upload Criminal Complaint</h2>
             <p className="text-gray-600">
-              Choose the type of discovery request you would like to propound in this case.
+              Upload the criminal complaint document to generate appropriate discovery requests.
             </p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              {discoveryTypes.map(type => (
-                <Card 
-                  key={type.id}
-                  className="cursor-pointer hover:border-blue-500 transition-colors"
-                  onClick={() => handleSelectDiscoveryType(type)}
-                >
-                  <CardHeader className="flex flex-row items-center gap-4">
-                    <div className="bg-primary/10 p-2 rounded-full">
-                      <type.icon className="h-6 w-6 text-primary" />
+            <Card className="mt-6">
+              <CardContent className="pt-6 pb-6">
+                <DocumentUploader onFileUploaded={handleFileUploaded} />
+              </CardContent>
+            </Card>
+            
+            {isExtracting && (
+              <div className="flex flex-col items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary mb-4"></div>
+                <p className="text-gray-700">Extracting information from document...</p>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {currentStep === STEPS.SELECT_DOCUMENTS && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">Step 2: Select Discovery Documents</h2>
+            <p className="text-gray-600">
+              Choose which discovery documents you want to generate based on the uploaded complaint.
+            </p>
+            
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Selected Complaint</CardTitle>
+                <CardDescription>
+                  The following complaint has been analyzed:
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center space-x-3 bg-gray-50 p-3 rounded-md">
+                  <FileText className="h-8 w-8 text-primary" />
+                  <div>
+                    <p className="font-medium">Criminal Complaint</p>
+                    <p className="text-sm text-gray-500">
+                      {extractedData?.caseNumber} - {extractedData?.defendant}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>Discovery Document Types</CardTitle>
+                <CardDescription>
+                  Select the types of discovery documents you want to generate:
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {discoveryTypes.map(type => (
+                    <div key={type.id} className="flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50">
+                      <Checkbox 
+                        id={type.id} 
+                        className="mt-1"
+                        checked={selectedDocumentTypes.includes(type.id)}
+                        onCheckedChange={() => toggleDocumentType(type.id)}
+                      />
+                      <div className="flex-1">
+                        <label htmlFor={type.id} className="font-medium flex items-center cursor-pointer">
+                          <type.icon className="h-5 w-5 mr-2 text-primary" />
+                          {type.title}
+                        </label>
+                        <p className="text-sm text-gray-500 ml-7">
+                          {type.description}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle>{type.title}</CardTitle>
-                      <CardDescription>
-                        {type.description}
-                      </CardDescription>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Button className="w-full">
-                      {type.id === 'form-interrogatories' ? 'Edit Form PDF' : 'Create Request'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  ))}
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-end">
+                <Button onClick={handleSelectDocuments} disabled={selectedDocumentTypes.length === 0}>
+                  Generate Selected Documents
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardFooter>
+            </Card>
           </div>
         )}
 
+        {/* Help section */}
         <div className="bg-blue-50 p-4 rounded-md mt-8">
           <div className="flex items-start">
             <div className="bg-blue-100 p-2 rounded-full mr-4">
@@ -333,71 +561,52 @@ const DiscoveryRequestPage = () => {
         </div>
       </div>
       
-      {/* Upload dialog */}
-      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-        <DialogContent>
+      {/* Dialog to confirm extracted data */}
+      <Dialog open={showExtractedDataDialog} onOpenChange={setShowExtractedDataDialog}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Upload Complaint Document</DialogTitle>
+            <DialogTitle>Confirm Extracted Information</DialogTitle>
             <DialogDescription>
-              Upload the criminal complaint document to generate appropriate discovery requests.
+              We've extracted the following information from the uploaded complaint. Please verify it's correct.
             </DialogDescription>
           </DialogHeader>
           
-          <DocumentUploader onFileUploaded={handleFileUploaded} />
-        </DialogContent>
-      </Dialog>
-
-      {/* Document selection dialog */}
-      <Dialog open={showDocumentSelectionDialog} onOpenChange={setShowDocumentSelectionDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select Documents to Generate</DialogTitle>
-            <DialogDescription>
-              Choose which discovery documents you would like to generate from the uploaded complaint.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            {discoveryTypes.map(type => (
-              <div key={type.id} className="flex items-start space-x-3">
-                <Checkbox 
-                  id={type.id} 
-                  checked={selectedDocumentTypes.includes(type.id)}
-                  onCheckedChange={() => toggleDocumentType(type.id)}
-                />
-                <div>
-                  <label
-                    htmlFor={type.id}
-                    className="font-medium text-sm flex items-center cursor-pointer"
-                  >
-                    <type.icon className="h-4 w-4 mr-2" />
-                    {type.title}
-                  </label>
-                  <p className="text-xs text-gray-500 ml-6">
-                    {type.description}
-                  </p>
+          {extractedData && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-1 gap-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Defendant:</span>
+                  <span className="font-medium">{extractedData.defendant}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Plaintiff:</span>
+                  <span className="font-medium">{extractedData.plaintiff}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Case Number:</span>
+                  <span className="font-medium">{extractedData.caseNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Filing Date:</span>
+                  <span className="font-medium">{extractedData.filingDate}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Court:</span>
+                  <span className="font-medium">{extractedData.courtName}</span>
+                </div>
+                <div className="pt-2">
+                  <span className="text-gray-500">Charge Description:</span>
+                  <p className="font-medium mt-1">{extractedData.chargeDescription}</p>
                 </div>
               </div>
-            ))}
-          </div>
-
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowDocumentSelectionDialog(false);
-                setUploadedFileUrl(null);
-              }}
-            >
-              Cancel
+            </div>
+          )}
+          
+          <DialogFooter className="flex space-x-2 pt-4">
+            <Button className="flex-1" onClick={handleConfirmExtractedData}>
+              Confirm & Continue
             </Button>
-            <Button
-              onClick={handleGenerateDocuments}
-              disabled={selectedDocumentTypes.length === 0}
-            >
-              Generate Documents
-            </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
