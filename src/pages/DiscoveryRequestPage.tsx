@@ -132,6 +132,10 @@ const DiscoveryRequestPage = () => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [showExtractedDataDialog, setShowExtractedDataDialog] = useState(false);
 
+  // State for viewing a generated document
+  const [viewingDocument, setViewingDocument] = useState<{ title: string; content: string } | null>(null);
+  const [showDocumentDialog, setShowDocumentDialog] = useState(false);
+
   // Fetch case details
   const { data: caseData, isLoading } = useQuery<CaseData>({
     queryKey: ['case', caseId],
@@ -208,15 +212,30 @@ const DiscoveryRequestPage = () => {
         const docType = discoveryTypes.find(d => d.id === typeId);
         if (!docType) return null;
         
-        // For now, we're just storing the document title
-        // In a real app, we would store the generated content or a reference to it
-        return docType.title;
+        // Call Gemini API to generate document content
+        const docContent = await generateDiscoveryDocument(docType.title, extractedData);
+        
+        // Return both the document title and its content
+        return {
+          title: docType.title,
+          content: docContent,
+          id: typeId
+        };
       });
       
       // Wait for all documents to be generated
-      const generatedDocs = (await Promise.all(generationPromises)).filter(Boolean) as string[];
+      const generatedDocsWithContent = (await Promise.all(generationPromises))
+        .filter(Boolean) as Array<{title: string, content: string, id: string}>;
       
-      setGeneratedDocuments(generatedDocs);
+      // Store the full document objects but just use titles for the UI
+      setGeneratedDocuments(generatedDocsWithContent.map(doc => doc.title));
+      
+      // Store the generated content in localStorage for later retrieval
+      // In a real app, you would store this in a database
+      generatedDocsWithContent.forEach(doc => {
+        localStorage.setItem(`discovery-doc-${caseId}-${doc.id}`, doc.content);
+      });
+      
       setIsGenerating(false);
       setCurrentStep(STEPS.VIEW_DOCUMENTS);
       
@@ -255,26 +274,36 @@ const DiscoveryRequestPage = () => {
     });
   };
 
-  const handleViewDocument = (documentType: string) => {
-    // For this prototype, we'll just show a toast that this feature is coming soon
-    toast({
-      title: "Feature in Development",
-      description: "The document editor will be available in the next update.",
-    });
+  const handleViewDocument = (documentTitle: string) => {
+    // Find the document type from the title
+    const docType = discoveryTypes.find(type => type.title === documentTitle);
     
-    // Original navigation code is still here but commented out
-    /*
-    const type = documentType.toLowerCase().replace(/\s/g, "-");
-    navigate(`/discovery-request/${caseId}/${type}`, {
-      state: { 
-        showPdfEditor: true,
-        formType: type,
-        pdfUrl: type === "form-interrogatories" 
-          ? "https://courts.ca.gov/sites/default/files/courts/default/2024-11/disc001.pdf"
-          : null
-      }
-    });
-    */
+    if (!docType) {
+      toast({
+        title: "Document Not Found",
+        description: "Could not find the selected document.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Retrieve the document content from localStorage
+    const storedContent = localStorage.getItem(`discovery-doc-${caseId}-${docType.id}`);
+    
+    if (storedContent) {
+      // Show the document content in a dialog
+      setViewingDocument({
+        title: documentTitle,
+        content: storedContent
+      });
+      setShowDocumentDialog(true);
+    } else {
+      toast({
+        title: "Document Content Not Available",
+        description: "The content for this document is not available. Please regenerate the document.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleReset = () => {
@@ -609,6 +638,54 @@ const DiscoveryRequestPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog to view generated document */}
+      {viewingDocument && (
+        <Dialog open={showDocumentDialog} onOpenChange={setShowDocumentDialog}>
+          <DialogContent className="max-w-4xl max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="text-xl">{viewingDocument.title}</DialogTitle>
+            </DialogHeader>
+            
+            <div className="overflow-y-auto mt-4 max-h-[50vh]">
+              <div className="bg-white p-6 border rounded-md">
+                {/* Split content by newlines and render each paragraph */}
+                {viewingDocument.content.split('\n').map((paragraph, idx) => (
+                  paragraph.trim() ? (
+                    <p key={idx} className="my-2">
+                      {paragraph}
+                    </p>
+                  ) : (
+                    <div key={idx} className="h-4" /> // Empty space for blank lines
+                  )
+                ))}
+              </div>
+            </div>
+            
+            <DialogFooter className="flex space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setShowDocumentDialog(false)}>
+                Close
+              </Button>
+              <Button 
+                onClick={() => {
+                  // Create a download link
+                  const blob = new Blob([viewingDocument.content], {type: 'text/plain'});
+                  const href = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = href;
+                  link.download = `${viewingDocument.title.replace(/\s+/g, '_')}.txt`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(href);
+                }}
+              >
+                Download Document
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </DashboardLayout>
   );
 };

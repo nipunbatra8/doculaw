@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import pdfToText from 'react-pdftotext';
 
 interface DocumentUploaderProps {
   onFileUploaded: (fileUrl: string, fileText: string) => void;
@@ -15,6 +16,7 @@ const DocumentUploader = ({ onFileUploaded }: DocumentUploaderProps) => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [extractionProgress, setExtractionProgress] = useState(0);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -43,59 +45,16 @@ const DocumentUploader = ({ onFileUploaded }: DocumentUploaderProps) => {
       setFile(selectedFile);
     }
   };
-
-  // Function to extract text from a PDF file
-  const extractTextFromPdf = async (file: File): Promise<string> => {
-    try {
-      // In a production environment, you'd typically:
-      // 1. Send the file to a server endpoint that has PDF parsing libraries
-      // 2. Use libraries like pdf.js or a cloud service for text extraction
-      
-      // For now, we'll create a mock text based on the filename
-      // This will be replaced with actual PDF text extraction in production
-      
-      // Simulate reading the file by getting its name and creating mock content
-      const fileName = file.name;
-      const caseName = fileName.replace('.pdf', '').replace(/_/g, ' ');
-      
-      // Mock criminal complaint text
-      return `
-SUPERIOR COURT OF CALIFORNIA
-COUNTY OF LOS ANGELES
-
-THE PEOPLE OF THE STATE OF CALIFORNIA,
-                     Plaintiff,
-v.
-JOHN DOE,
-                     Defendant.
-
-CASE NO: CR-2023-12345
-
-CRIMINAL COMPLAINT
-
-Count 1:
-On or about January 15, 2023, in the County of Los Angeles, State of California, 
-the defendant JOHN DOE did willfully and unlawfully enter a commercial building 
-located at 123 Main Street with the intent to commit larceny and any felony, 
-in violation of Penal Code Section 459, a FELONY.
-
-Filed this 20th day of January, 2023
-District Attorney of Los Angeles County
-`;
-    } catch (error) {
-      console.error("Error extracting text from PDF:", error);
-      return "Error extracting text from document.";
-    }
-  };
   
   const handleUpload = async () => {
     if (!file || !user) return;
     
     setUploading(true);
     setUploadProgress(0);
+    setExtractionProgress(0);
     
     try {
-      // Start simulating upload progress
+      // Start simulating upload progress for UI
       const simulateProgress = setInterval(() => {
         setUploadProgress(prev => {
           if (prev >= 95) {
@@ -106,40 +65,45 @@ District Attorney of Los Angeles County
         });
       }, 200);
       
-      // Extract text from the PDF
-      const extractedText = await extractTextFromPdf(file);
+      // Set extraction progress to indicate it's working
+      setExtractionProgress(50);
+      
+      // Extract text using react-pdftotext
+      const extractedText = await pdfToText(file);
+      
+      // Extraction is complete
+      setExtractionProgress(100);
       
       // In a real application, you'd upload the file to Supabase storage
-      // For this prototype, we'll use a mock file URL
       const mockFileUrl = `https://storage.example.com/documents/${file.name}`;
       
-      // Simulate completion after 3 seconds
+      // Simulate upload completion
+      clearInterval(simulateProgress);
+      setUploadProgress(100);
+      
+      toast({
+        title: "Upload successful",
+        description: "Your complaint document has been uploaded and processed.",
+      });
+      
       setTimeout(() => {
-        clearInterval(simulateProgress);
-        setUploadProgress(100);
-        
-        toast({
-          title: "Upload successful",
-          description: "Your complaint document has been uploaded and processed.",
-        });
-        
-        setTimeout(() => {
-          // Pass both the file URL and the extracted text to the parent component
-          onFileUploaded(mockFileUrl, extractedText);
-          setUploading(false);
-          setFile(null);
-          setUploadProgress(0);
-        }, 500);
-      }, 3000);
+        // Pass both the file URL and the extracted text to the parent component
+        onFileUploaded(mockFileUrl, extractedText);
+        setUploading(false);
+        setFile(null);
+        setUploadProgress(0);
+        setExtractionProgress(0);
+      }, 500);
       
     } catch (error) {
-      console.error("Error uploading file:", error);
+      console.error("Error processing PDF:", error);
       toast({
-        title: "Upload failed",
-        description: "There was an error uploading your file. Please try again.",
+        title: "Processing failed",
+        description: "There was an error extracting text from your PDF. Please try again.",
         variant: "destructive",
       });
       setUploading(false);
+      setExtractionProgress(0);
     }
   };
   
@@ -182,11 +146,32 @@ District Attorney of Los Angeles County
           </div>
           
           {uploading && (
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-doculaw-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${uploadProgress}%` }}
-              ></div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>Uploading</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-doculaw-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+              
+              {extractionProgress > 0 && (
+                <>
+                  <div className="flex justify-between text-xs text-gray-600 mt-2">
+                    <span>Extracting text</span>
+                    <span>{extractionProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${extractionProgress}%` }}
+                    ></div>
+                  </div>
+                </>
+              )}
             </div>
           )}
           
@@ -202,7 +187,7 @@ District Attorney of Los Angeles County
               onClick={handleUpload}
               disabled={uploading}
             >
-              {uploading ? "Uploading..." : "Upload & Generate"}
+              {uploading ? "Processing..." : "Upload & Process"}
             </Button>
           </div>
         </div>

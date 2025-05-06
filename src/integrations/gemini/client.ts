@@ -46,9 +46,7 @@ export interface ComplaintInformation {
  */
 export async function extractComplaintInformation(docText: string): Promise<ComplaintInformation> {
   try {
-    // For now, this is a mock implementation since we don't have actual document text
-    // In production, docText would be the extracted text from the uploaded PDF
-    
+    // For real PDF text, which might be noisy or have formatting issues
     const model = genAI.getGenerativeModel({ 
       model: "gemini-1.5-pro",
       safetySettings,
@@ -56,15 +54,29 @@ export async function extractComplaintInformation(docText: string): Promise<Comp
     
     const prompt = `
     You are an AI legal assistant helping to extract relevant information from a criminal complaint document.
-    Please analyze the following text from a criminal complaint and extract these key details:
-    1. Defendant name
-    2. Plaintiff name (usually the state)
-    3. Case number
-    4. Filing date
-    5. Court name
-    6. Charge description (the criminal charges being alleged)
+    The document has been scanned and OCRed, so there might be formatting issues or unnecessary text.
     
-    Format your response as a JSON object with these keys: defendant, plaintiff, caseNumber, filingDate, chargeDescription, courtName.
+    Please carefully analyze the following text from a criminal complaint and extract these key details:
+    1. Defendant name (e.g., John Doe, Jane Smith)
+    2. Plaintiff name (usually the state or government entity like "The People of the State of California")
+    3. Case number (e.g., CR-2023-12345, 123456-CR)
+    4. Filing date (the date the complaint was filed)
+    5. Court name (e.g., Superior Court of California, County of Los Angeles)
+    6. Charge description (a brief description of the criminal charges being alleged)
+    
+    For each field, if you can't find a clear value, provide your best guess based on the available information.
+    
+    Format your response as a JSON object with these keys:
+    {
+      "defendant": "string",
+      "plaintiff": "string",
+      "caseNumber": "string",
+      "filingDate": "string",
+      "chargeDescription": "string",
+      "courtName": "string"
+    }
+    
+    Return only the JSON object with no other text.
     
     Document text:
     ${docText}
@@ -74,11 +86,23 @@ export async function extractComplaintInformation(docText: string): Promise<Comp
     const response = await result.response;
     const text = response.text();
     
+    console.log("Gemini API response:", text);
+    
     // The response should be a JSON string, parse it to get the structured data
     try {
       return JSON.parse(text);
     } catch (parseError) {
       console.error("Error parsing Gemini response as JSON:", parseError);
+      
+      // Try to extract JSON from the response text if it's not valid JSON
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      } catch (secondParseError) {
+        console.error("Second attempt at parsing JSON failed:", secondParseError);
+      }
       
       // Fallback to mock data if parsing fails
       return {
