@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { FileText, Save, Download, X } from "lucide-react";
+import { FileText, Download, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -38,9 +37,7 @@ interface DocumentViewerProps {
 const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerProps) => {
   const { toast } = useToast();
   const [document, setDocument] = useState<Document | null>(null);
-  const [extractedText, setExtractedText] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  const [saving, setSaving] = useState<boolean>(false);
   const [isFromStorage, setIsFromStorage] = useState<boolean>(false);
 
   useEffect(() => {
@@ -48,7 +45,6 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
       fetchDocument();
     } else {
       setDocument(null);
-      setExtractedText("");
       setIsFromStorage(false);
     }
   }, [documentId, open]);
@@ -77,7 +73,6 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
       } else {
         // Document found in database
         setDocument(data);
-        setExtractedText(data.extracted_text || "");
         setIsFromStorage(false);
         
         // Get a signed URL for the document
@@ -169,28 +164,7 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
       };
       
       setDocument(storageDocument);
-      setExtractedText("");
       setIsFromStorage(true);
-      
-      // Try to extract text
-      try {
-        const { data, error } = await supabase.storage
-          .from('doculaw')
-          .download(filePath);
-          
-        if (error) throw error;
-        
-        if (data) {
-          // Use pdf-to-text to extract text
-          const fileObj = new File([data], file.name, { type: 'application/pdf' });
-          const pdfToText = (await import('react-pdftotext')).default;
-          const text = await pdfToText(fileObj);
-          setExtractedText(text);
-        }
-      } catch (extractError) {
-        console.error("Error extracting text:", extractError);
-        // Continue even if extraction fails
-      }
     } catch (error) {
       console.error("Error fetching from storage:", error);
       throw error;
@@ -213,74 +187,12 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
     }
   };
 
-  const handleSaveText = async () => {
-    if (!document) return;
-    
-    setSaving(true);
-    
-    try {
-      if (isFromStorage) {
-        // Store in the database first
-        const { data, error } = await supabase
-          .from('documents')
-          .insert({
-            user_id: document.user_id || '',
-            case_id: document.case_id,
-            name: document.name,
-            path: document.path,
-            url: document.url,
-            type: document.type,
-            size: document.size,
-            extracted_text: extractedText,
-            created_at: document.created_at
-          })
-          .select()
-          .single();
-        
-        if (error) throw error;
-        
-        setDocument(data);
-        setIsFromStorage(false);
-        
-        toast({
-          title: "Document Saved",
-          description: "The document has been imported to your database."
-        });
-      } else {
-        // Update existing database record
-        const { error } = await supabase
-          .from('documents')
-          .update({
-            extracted_text: extractedText,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', document.id);
-        
-        if (error) throw error;
-        
-        toast({
-          title: "Document Saved",
-          description: "The document text has been updated successfully."
-        });
-      }
-    } catch (error) {
-      console.error("Error saving document:", error);
-      toast({
-        title: "Save Failed",
-        description: "Failed to save the document. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (!open) return null;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[90vh] h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle className="flex items-center">
             <FileText className="h-5 w-5 mr-2" />
             {document?.name || "Document Viewer"}
@@ -291,48 +203,31 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
             )}
           </DialogTitle>
           <DialogDescription>
-            {isFromStorage 
-              ? "This file exists in storage but not in the database. Save to import it." 
-              : "View and edit the extracted text from this document."}
+            View the PDF document
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex flex-col md:flex-row gap-4 h-full flex-grow overflow-hidden">
-          {/* PDF Preview */}
-          <div className="flex-1 h-full max-h-[50vh] md:max-h-[60vh] overflow-auto border rounded">
-            {loading ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-              </div>
-            ) : document ? (
-              <iframe 
-                src={document.url}
-                className="w-full h-full border-0"
-                title="Document Preview"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">No document selected</p>
-              </div>
-            )}
-          </div>
-          
-          {/* Extracted Text Editor */}
-          <div className="flex-1 h-full flex flex-col">
-            <h3 className="font-medium text-gray-700 mb-2">Extracted Text</h3>
-            <Textarea
-              className="flex-grow resize-none min-h-[50vh] md:min-h-[60vh]"
-              placeholder={isFromStorage 
-                ? "Click Save to extract text and import this document..." 
-                : "No text extracted from this document"}
-              value={extractedText}
-              onChange={(e) => setExtractedText(e.target.value)}
-              disabled={loading || !document}
+        {/* PDF viewer container that fills the available space */}
+        <div className="flex-1 overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+          ) : document ? (
+            <iframe 
+              src={document.url}
+              className="w-full h-full"
+              title="Document Preview"
+              style={{ height: "100%", border: "none" }}
             />
-          </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-500">No document selected</p>
+            </div>
+          )}
         </div>
         
-        <DialogFooter className="mt-4">
+        <DialogFooter className="shrink-0 px-6 py-4 border-t">
           <Button
             variant="outline"
             onClick={onClose}
@@ -342,23 +237,13 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
           </Button>
           
           {document && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => window.open(document.url, '_blank')}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Download PDF
-              </Button>
-              
-              <Button
-                onClick={handleSaveText}
-                disabled={saving || !document}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? "Saving..." : isFromStorage ? "Import Document" : "Save Text"}
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              onClick={() => window.open(document.url, '_blank')}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download PDF
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>
