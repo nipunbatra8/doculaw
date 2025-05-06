@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import pdfToText from 'react-pdftotext';
+import { extractComplaintInformation } from "@/integrations/gemini/client";
 
 interface DocumentUploaderProps {
   onFileUploaded: (fileUrl: string, fileText: string, fileName: string) => void;
@@ -133,7 +134,30 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
         throw new Error(`Signed URL error: ${signedUrlError.message}`);
       }
       
-      // Save document metadata to Supabase
+      // If this is a complaint document and we have a case ID, process and store the complaint data
+      if (fileType === 'complaint' && caseId) {
+        try {
+          // Extract complaint information using the Gemini API
+          const complaintInfo = await extractComplaintInformation(extractedText);
+          
+          // Save the complaint data directly to the case record
+          await supabase
+            .from('cases')
+            .update({
+              complaint_processed: true,
+              complaint_data: complaintInfo,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', caseId);
+            
+          console.log('Complaint data saved to case record:', complaintInfo);
+        } catch (complaintError) {
+          console.error('Error processing complaint data:', complaintError);
+          // Continue with document upload even if complaint processing fails
+        }
+      }
+      
+      // Save document metadata to Supabase - don't save extracted_text anymore
       await supabase
         .from('documents')
         .insert({
@@ -144,7 +168,6 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
           url: signedUrlData.signedUrl,
           type: fileType,
           size: file.size,
-          extracted_text: extractedText,
           created_at: new Date().toISOString()
         });
       

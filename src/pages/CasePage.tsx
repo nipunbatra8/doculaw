@@ -31,10 +31,13 @@ import {
   Download,
   Clock,
   Upload,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import PdfEditor from "@/components/PdfEditor";
 import DocumentViewer from "@/components/discovery/DocumentViewer";
+import { ComplaintInformation } from "@/integrations/gemini/client";
 
 // Type for case data from Supabase
 type CaseData = {
@@ -47,6 +50,9 @@ type CaseData = {
   updated_at: string;
   user_id: string;
   archived_at: string | null;
+  // Complaint related fields
+  complaint_processed: boolean | null;
+  complaint_data: ComplaintInformation | null;
   // Additional fields for UI display
   lastActivity?: string;
   caseNumber?: string;
@@ -86,6 +92,8 @@ const CasePage = () => {
   const [showPdfEditor, setShowPdfEditor] = useState<boolean>(false);
   const [viewingDocumentId, setViewingDocumentId] = useState<string | null>(null);
   const [showDocumentViewer, setShowDocumentViewer] = useState<boolean>(false);
+  const [showComplaintDetails, setShowComplaintDetails] = useState<boolean>(false);
+  const [complaintInfo, setComplaintInfo] = useState<ComplaintInformation | null>(null);
   
   // Client form
   const [clientName, setClientName] = useState<string>("");
@@ -100,7 +108,6 @@ const CasePage = () => {
   const [caseForm, setCaseForm] = useState({
     name: "",
     client: "",
-    case_type: "",
     status: "",
   });
 
@@ -128,14 +135,35 @@ const CasePage = () => {
       
       if (!data) return null;
       
+      // Use a type that includes both existing fields and possible new fields
+      type DatabaseCaseData = {
+        id: string;
+        name: string;
+        client: string | null;
+        case_type: string | null;
+        status: string;
+        created_at: string;
+        updated_at: string;
+        user_id: string;
+        archived_at: string | null;
+        complaint_processed?: boolean;
+        complaint_data?: ComplaintInformation;
+      };
+      
+      const dbData = data as DatabaseCaseData;
+      
       // Enhance data with additional UI fields
-      return {
+      const enhancedData: CaseData = {
         ...data,
+        complaint_processed: dbData.complaint_processed || null,
+        complaint_data: dbData.complaint_data || null,
         lastActivity: formatRelativeTime(data.updated_at),
         caseNumber: `CV-${new Date(data.created_at).getFullYear()}-${data.id.substring(0, 5)}`,
         court: getCourt(data.case_type),
         filedDate: format(parseISO(data.created_at), 'MMM d, yyyy')
       };
+      
+      return enhancedData;
     },
     enabled: !!user && !!caseId
   });
@@ -146,15 +174,59 @@ const CasePage = () => {
       setCaseForm({
         name: caseData.name,
         client: caseData.client || "",
-        case_type: caseData.case_type || "",
         status: caseData.status,
       });
       
       if (caseData.client) {
         setClientName(caseData.client);
       }
+      
+      // Set complaint info from case data if available
+      if (caseData.complaint_processed && caseData.complaint_data) {
+        setComplaintInfo(caseData.complaint_data);
+      } else {
+        // Only fetch if we don't have it already
+        fetchComplaintInfo();
+      }
     }
-  }, [caseData]);
+  }, [caseData, caseId, user]);
+
+  // Function to fetch complaint information from documents
+  const fetchComplaintInfo = async () => {
+    if (!user || !caseId) return;
+    
+    try {
+      // First check if we have any complaint documents
+      const { data: documents, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('case_id', caseId)
+        .eq('type', 'complaint')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (error) throw error;
+      
+      if (!documents || documents.length === 0) {
+        console.log('No complaint documents found for this case');
+        return;
+      }
+      
+      // If we have complaint documents but no processed data,
+      // set default complaint info as a fallback
+      setComplaintInfo({
+        defendant: caseData?.client || "Unknown Defendant",
+        plaintiff: "State of California",
+        caseNumber: caseData?.caseNumber || "Unknown",
+        filingDate: caseData?.filedDate || "Unknown",
+        chargeDescription: "Unknown Charges",
+        courtName: caseData?.court || "Unknown Court"
+      });
+      
+    } catch (fetchError) {
+      console.error('Error fetching complaint documents:', fetchError);
+    }
+  };
 
   // Utility function to determine court based on case type
   const getCourt = (caseType: string | null): string => {
@@ -195,7 +267,6 @@ const CasePage = () => {
         .update({
           name: caseForm.name,
           client: caseForm.client,
-          case_type: caseForm.case_type,
           status: caseForm.status,
           updated_at: new Date().toISOString()
         })
@@ -464,15 +535,6 @@ const CasePage = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Case Type
-                        </label>
-                        <Input
-                          value={caseForm.case_type}
-                          onChange={(e) => setCaseForm({...caseForm, case_type: e.target.value})}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
                           Status
                         </label>
                         <select
@@ -503,16 +565,8 @@ const CasePage = () => {
                         <span className="font-medium">{caseData.caseNumber}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Filing Date:</span>
-                        <span>{caseData.filedDate}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Court:</span>
-                        <span>{caseData.court}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Type:</span>
-                        <span>{caseData.case_type || "Not specified"}</span>
+                        <span className="text-gray-500">Last Updated:</span>
+                        <span>{caseData.lastActivity}</span>
                       </div>
                     </div>
                     <div className="space-y-3">
@@ -530,14 +584,67 @@ const CasePage = () => {
                         <span className="text-gray-500">Created:</span>
                         <span>{format(parseISO(caseData.created_at), 'MMM d, yyyy')}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Last Updated:</span>
-                        <span>{caseData.lastActivity}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Client:</span>
-                        <span className="font-medium">{caseData.client || "No client assigned"}</span>
-                      </div>
+                    </div>
+                    
+                    {/* Complaint Information Dropdown */}
+                    <div className="md:col-span-2 mt-3">
+                      <button
+                        onClick={() => setShowComplaintDetails(!showComplaintDetails)}
+                        className="flex items-center justify-between w-full px-4 py-2 text-left border rounded-md hover:bg-gray-50"
+                      >
+                        <span className="font-medium">
+                          View more information from complaint
+                        </span>
+                        {showComplaintDetails ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </button>
+                      
+                      {showComplaintDetails && (
+                        <div className="mt-3 border rounded-md p-4 bg-gray-50">
+                          {complaintInfo ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <div>
+                                  <span className="text-gray-500">Court:</span>
+                                  <p className="font-medium">{complaintInfo.courtName}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Filing Date:</span>
+                                  <p className="font-medium">{complaintInfo.filingDate}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Plaintiff:</span>
+                                  <p className="font-medium">{complaintInfo.plaintiff}</p>
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <div>
+                                  <span className="text-gray-500">Defendant:</span>
+                                  <p className="font-medium">{complaintInfo.defendant}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Case Number:</span>
+                                  <p className="font-medium">{complaintInfo.caseNumber}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Charges:</span>
+                                  <p className="font-medium">{complaintInfo.chargeDescription}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-4">
+                              <p className="text-gray-500">No complaint information available.</p>
+                              <p className="text-sm text-gray-400 mt-1">
+                                Upload a complaint document using "Propound Discovery Request" to extract case details.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -971,6 +1078,7 @@ const CaseDocuments = ({
   const { toast } = useToast();
   const navigate = useNavigate();
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState<string>("");
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   
@@ -1194,6 +1302,13 @@ const CaseDocuments = ({
     }
   };
   
+  // Reset confirmation text when dialog closes
+  useEffect(() => {
+    if (!documentToDelete) {
+      setDeleteConfirmText("");
+    }
+  }, [documentToDelete]);
+  
   // Rest of the component with minor updates to support storage files
   if (isLoading) {
     return (
@@ -1291,7 +1406,12 @@ const CaseDocuments = ({
       </div>
       
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!documentToDelete} onOpenChange={() => setDocumentToDelete(null)}>
+      <Dialog 
+        open={!!documentToDelete} 
+        onOpenChange={(open) => {
+          if (!open) setDocumentToDelete(null);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-red-600 flex items-center">
@@ -1299,9 +1419,27 @@ const CaseDocuments = ({
               Delete Document
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this document? This action cannot be undone.
+              <p className="mb-2">
+                Are you <strong>absolutely sure</strong> you want to delete this document? 
+              </p>
+              <p className="mb-2 text-red-500">
+                This action <strong>cannot be undone</strong> and all document data will be permanently lost.
+              </p>
+              <p>
+                Type <strong>DELETE</strong> below to confirm:
+              </p>
             </DialogDescription>
           </DialogHeader>
+          
+          <div className="my-2">
+            <Input 
+              placeholder="Type DELETE to confirm" 
+              className="border-red-200"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+            />
+          </div>
+          
           <DialogFooter className="flex flex-col sm:flex-row gap-2">
             <Button 
               variant="outline" 
@@ -1311,8 +1449,10 @@ const CaseDocuments = ({
               Cancel
             </Button>
             <Button 
+              id="confirm-delete-btn"
               variant="destructive" 
               className="sm:flex-1"
+              disabled={deleteConfirmText !== "DELETE"}
               onClick={handleDeleteDocument}
             >
               Delete Document
