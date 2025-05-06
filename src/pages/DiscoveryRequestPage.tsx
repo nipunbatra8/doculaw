@@ -29,7 +29,10 @@ import {
   Upload,
   Check,
   AlertTriangle,
-  ArrowRight
+  ArrowRight,
+  Eye,
+  RefreshCw,
+  FileUp
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Link } from "react-router-dom";
@@ -42,6 +45,7 @@ import { Badge } from "@/components/ui/badge";
 import { format, parseISO } from "date-fns";
 import { extractComplaintInformation, generateDiscoveryDocument, ComplaintInformation } from "@/integrations/gemini/client";
 import { Textarea } from "@/components/ui/textarea";
+import DocumentViewer from "@/components/discovery/DocumentViewer";
 
 // Define the CaseData type for our query result
 type CaseData = {
@@ -54,7 +58,22 @@ type CaseData = {
   updated_at: string;
   user_id: string;
   archived_at: string | null;
+  complaint_processed?: boolean;
+  complaint_data?: ComplaintInformation;
 };
+
+// Document type for fetching uploaded complaint
+interface Document {
+  id: string;
+  user_id: string;
+  case_id: string | null;
+  name: string;
+  path: string;
+  url: string;
+  type: string;
+  size: number;
+  created_at: string;
+}
 
 // Using ComplaintInformation from the Gemini client instead
 // interface ExtractedComplaintData {
@@ -136,9 +155,14 @@ const DiscoveryRequestPage = () => {
   // State for viewing a generated document
   const [viewingDocument, setViewingDocument] = useState<{ title: string; content: string } | null>(null);
   const [showDocumentDialog, setShowDocumentDialog] = useState(false);
+  
+  // State for complaint document
+  const [complaintDocument, setComplaintDocument] = useState<Document | null>(null);
+  const [isViewingComplaint, setIsViewingComplaint] = useState(false);
+  const [replacingComplaint, setReplacingComplaint] = useState(false);
 
   // Fetch case details
-  const { data: caseData, isLoading } = useQuery<CaseData>({
+  const { data: caseData, isLoading: isLoadingCase } = useQuery<CaseData>({
     queryKey: ['case', caseId],
     queryFn: async () => {
       if (!user || !caseId) return null;
@@ -156,6 +180,51 @@ const DiscoveryRequestPage = () => {
     enabled: !!user && !!caseId
   });
 
+  // Fetch complaint document if exists
+  const { data: complaintData, isLoading: isLoadingComplaint } = useQuery<Document | null>({
+    queryKey: ['complaint', caseId],
+    queryFn: async () => {
+      if (!user || !caseId) return null;
+      
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('case_id', caseId)
+        .eq('type', 'complaint')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No complaint found, not an error
+          return null;
+        }
+        throw error;
+      }
+      
+      return data;
+    },
+    enabled: !!user && !!caseId
+  });
+
+  // Update the check if complaint exists effect to be more explicit
+  useEffect(() => {
+    if (!isLoadingCase && !isLoadingComplaint) {
+      if (complaintData) {
+        // We have an uploaded complaint document
+        setComplaintDocument(complaintData);
+        
+        // If we also have extracted data, we can go straight to select documents step
+        if (caseData?.complaint_processed && caseData?.complaint_data) {
+          setExtractedData(caseData.complaint_data);
+          // Don't automatically go to select documents anymore, let the user choose
+          // setCurrentStep(STEPS.SELECT_DOCUMENTS);
+        }
+      }
+    }
+  }, [caseData, complaintData, isLoadingCase, isLoadingComplaint]);
+
   // Handler for file upload
   const handleFileUploaded = async (fileUrl: string, fileText: string, fileName: string) => {
     setUploadedFileUrl(fileUrl);
@@ -170,6 +239,15 @@ const DiscoveryRequestPage = () => {
       setExtractedData(extractedInfo);
       setIsExtracting(false);
       setShowExtractedDataDialog(true);
+      
+      // If we were replacing a complaint, update the document state and show success message
+      if (replacingComplaint) {
+        toast({
+          title: "Complaint Replaced",
+          description: "The complaint document has been successfully replaced.",
+        });
+        // We'll refresh the data by reloading the page after dialog is closed
+      }
     } catch (error) {
       console.error("Error extracting information from document:", error);
       
@@ -199,10 +277,67 @@ const DiscoveryRequestPage = () => {
   const handleConfirmExtractedData = () => {
     setShowExtractedDataDialog(false);
     setCurrentStep(STEPS.SELECT_DOCUMENTS);
+    
+    // If this was a replacement, let's reload the page to ensure the document is refreshed
+    if (replacingComplaint) {
+      toast({
+        title: "Complaint Updated",
+        description: "The complaint has been replaced and information updated.",
+      });
+      
+      // Give a small delay to show the toast before refreshing
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    }
+    
+    setReplacingComplaint(false);
+  };
+
+  // Add a function to handle viewing the complaint document
+  const handleViewComplaint = () => {
+    if (complaintDocument) {
+      setIsViewingComplaint(true);
+    } else {
+      toast({
+        title: "No Complaint Document",
+        description: "There is no complaint document uploaded for this case.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Add a function to handle replacing the complaint
+  const handleReplaceComplaint = () => {
+    setReplacingComplaint(true);
+    setCurrentStep(STEPS.UPLOAD_COMPLAINT);
+  };
+
+  // Add a function to go straight to document selection
+  const handleSkipToSelection = () => {
+    if (extractedData) {
+      setCurrentStep(STEPS.SELECT_DOCUMENTS);
+    } else if (caseData?.complaint_data) {
+      setExtractedData(caseData.complaint_data);
+      setCurrentStep(STEPS.SELECT_DOCUMENTS);
+    } else {
+      toast({
+        title: "No Complaint Data",
+        description: "There is no complaint data available. Please upload a complaint document first.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleSelectDocuments = async () => {
-    if (!extractedData) return;
+    if (!extractedData) {
+      toast({
+        title: "Missing Information",
+        description: "No complaint information found. Please upload a complaint document first.",
+        variant: "destructive"
+      });
+      return;
+    }
     
     // Move to generating documents
     setCurrentStep(STEPS.GENERATING_DOCUMENTS);
@@ -309,20 +444,107 @@ const DiscoveryRequestPage = () => {
   };
 
   const handleReset = () => {
-    setCurrentStep(STEPS.UPLOAD_COMPLAINT);
-    setUploadedFileUrl(null);
-    setExtractedData(null);
-    setGeneratedDocuments([]);
-    setSelectedDocumentTypes([
-      "form-interrogatories",
-      "special-interrogatories",
-      "request-for-production",
-      "request-for-admissions"
-    ]);
+    if (complaintDocument) {
+      // If we already have a complaint, just go back to the selection step
+      setCurrentStep(STEPS.SELECT_DOCUMENTS);
+      setGeneratedDocuments([]);
+      setSelectedDocumentTypes([
+        "form-interrogatories",
+        "special-interrogatories",
+        "request-for-production",
+        "request-for-admissions"
+      ]);
+    } else {
+      // Complete reset if no complaint
+      setCurrentStep(STEPS.UPLOAD_COMPLAINT);
+      setUploadedFileUrl(null);
+      setExtractedData(null);
+      setGeneratedDocuments([]);
+      setSelectedDocumentTypes([
+        "form-interrogatories",
+        "special-interrogatories",
+        "request-for-production",
+        "request-for-admissions"
+      ]);
+    }
+    
+    setReplacingComplaint(false);
+  };
+
+  // Add initial greeting screen
+  const renderInitialScreen = () => {
+    if (complaintDocument) {
+      return (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Discovery Documents</h2>
+          <p className="text-gray-600">
+            You can generate discovery documents based on the uploaded complaint.
+            Choose an option below to continue:
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+            <Card className="hover:border-blue-500 transition-colors">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center">
+                  <FileText className="h-5 w-5 mr-2" />
+                  Generate Discovery Documents
+                </CardTitle>
+                <CardDescription>
+                  Create interrogatories, requests for production, and other discovery documents
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" onClick={handleSkipToSelection}>
+                  Generate Documents
+                </Button>
+              </CardContent>
+            </Card>
+            
+            <Card className="hover:border-blue-500 transition-colors">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center">
+                  <Eye className="h-5 w-5 mr-2" />
+                  View Complaint
+                </CardTitle>
+                <CardDescription>
+                  Review the uploaded complaint document
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button variant="outline" className="w-full" onClick={handleViewComplaint}>
+                  View Document
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="mt-4">
+            <Button variant="link" className="h-auto p-0" onClick={handleReplaceComplaint}>
+              Replace complaint document
+              <RefreshCw className="h-3.5 w-3.5 ml-1" />
+            </Button>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Upload Complaint</h2>
+          <p className="text-gray-600">
+            To begin generating discovery documents, please upload the criminal complaint document.
+          </p>
+          
+          <Button className="mt-4" onClick={() => setCurrentStep(STEPS.UPLOAD_COMPLAINT)}>
+            <FileUp className="h-4 w-4 mr-2" />
+            Upload Complaint
+          </Button>
+        </div>
+      );
+    }
   };
 
   // Loading state
-  if (isLoading) {
+  if (isLoadingCase || isLoadingComplaint) {
     return (
       <DashboardLayout>
         <div className="p-6 animate-pulse">
@@ -424,6 +646,55 @@ const DiscoveryRequestPage = () => {
         {/* Case Information Card */}
         {renderCaseInfo()}
 
+        {/* Uploaded Complaint Section - Show when a complaint exists */}
+        {complaintDocument && currentStep !== STEPS.GENERATING_DOCUMENTS && currentStep !== STEPS.VIEW_DOCUMENTS && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Uploaded Complaint</CardTitle>
+              <CardDescription>
+                A complaint document has already been uploaded for this case.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center space-x-3 bg-gray-50 p-4 rounded-md mb-4">
+                <FileText className="h-8 w-8 text-primary" />
+                <div className="flex-1">
+                  <h3 className="font-medium">{complaintDocument.name}</h3>
+                  <p className="text-sm text-gray-500">
+                    Uploaded on {format(new Date(complaintDocument.created_at), 'MMM d, yyyy')}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3">
+                <Button 
+                  variant="outline" 
+                  onClick={handleViewComplaint}
+                  className="flex items-center"
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Complaint
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleReplaceComplaint}
+                  className="flex items-center"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Replace Complaint
+                </Button>
+                <Button 
+                  onClick={handleSkipToSelection}
+                  className="flex items-center"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Generate Discovery Documents
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Main Content Area */}
         {currentStep === STEPS.GENERATING_DOCUMENTS && (
           <div className="flex flex-col items-center justify-center py-12">
@@ -482,11 +753,16 @@ const DiscoveryRequestPage = () => {
           </div>
         )}
         
-        {currentStep === STEPS.UPLOAD_COMPLAINT && (
+        {/* Show upload UI only when actively uploading or replacing */}
+        {currentStep === STEPS.UPLOAD_COMPLAINT && (replacingComplaint || isExtracting || uploadedFileUrl) && (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Step 1: Upload Criminal Complaint</h2>
+            <h2 className="text-xl font-semibold">
+              {replacingComplaint ? "Replace Complaint Document" : "Step 1: Upload Criminal Complaint"}
+            </h2>
             <p className="text-gray-600">
-              Upload the criminal complaint document to generate appropriate discovery requests.
+              {replacingComplaint 
+                ? "Upload a new complaint document to replace the existing one." 
+                : "Upload the criminal complaint document to generate appropriate discovery requests."}
             </p>
             
             <Card className="mt-6">
@@ -510,7 +786,11 @@ const DiscoveryRequestPage = () => {
         
         {currentStep === STEPS.SELECT_DOCUMENTS && (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Step 2: Select Discovery Documents</h2>
+            <h2 className="text-xl font-semibold">
+              {complaintDocument 
+                ? "Generate Discovery Documents" 
+                : "Step 2: Select Discovery Documents"}
+            </h2>
             <p className="text-gray-600">
               Choose which discovery documents you want to generate based on the uploaded complaint.
             </p>
@@ -519,19 +799,61 @@ const DiscoveryRequestPage = () => {
               <CardHeader>
                 <CardTitle>Selected Complaint</CardTitle>
                 <CardDescription>
-                  The following complaint has been analyzed:
+                  The following complaint information will be used for document generation:
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center space-x-3 bg-gray-50 p-3 rounded-md">
+                <div className="flex items-center space-x-3 bg-gray-50 p-3 rounded-md mb-4">
                   <FileText className="h-8 w-8 text-primary" />
-                  <div>
-                    <p className="font-medium">Criminal Complaint</p>
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      {complaintDocument?.name || "Criminal Complaint"}
+                    </p>
                     <p className="text-sm text-gray-500">
                       {extractedData?.caseNumber} - {extractedData?.defendant}
                     </p>
                   </div>
+                  
+                  {complaintDocument && (
+                    <Button variant="ghost" size="sm" onClick={handleViewComplaint}>
+                      <Eye className="h-4 w-4 mr-1" />
+                      View
+                    </Button>
+                  )}
                 </div>
+                
+                {/* Show some key extracted information */}
+                {extractedData && (
+                  <div className="bg-blue-50 p-3 rounded-md mb-4">
+                    <h3 className="text-sm font-medium text-blue-800 mb-2">Extracted Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-4 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Defendant:</span>
+                        <span className="font-medium">{extractedData.defendant}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Plaintiff:</span>
+                        <span className="font-medium">{extractedData.plaintiff}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Case #:</span>
+                        <span className="font-medium">{extractedData.caseNumber}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Filed:</span>
+                        <span className="font-medium">{extractedData.filingDate}</span>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="link" 
+                      size="sm" 
+                      className="mt-1 h-auto p-0 text-blue-700"
+                      onClick={() => setShowExtractedDataDialog(true)}
+                    >
+                      Edit Information
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
             
@@ -565,7 +887,12 @@ const DiscoveryRequestPage = () => {
                   ))}
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end">
+              <CardFooter className="flex justify-end space-x-3">
+                {complaintDocument && (
+                  <Button variant="outline" onClick={handleReplaceComplaint}>
+                    Replace Complaint
+                  </Button>
+                )}
                 <Button onClick={handleSelectDocuments} disabled={selectedDocumentTypes.length === 0}>
                   Generate Selected Documents
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -573,6 +900,11 @@ const DiscoveryRequestPage = () => {
               </CardFooter>
             </Card>
           </div>
+        )}
+
+        {/* Show initial screen at UPLOAD_COMPLAINT step when we're not actively uploading */}
+        {currentStep === STEPS.UPLOAD_COMPLAINT && !replacingComplaint && !isExtracting && !uploadedFileUrl && (
+          renderInitialScreen()
         )}
 
         {/* Help section */}
@@ -740,6 +1072,16 @@ const DiscoveryRequestPage = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      )}
+      
+      {/* Document Viewer for viewing the complaint */}
+      {complaintDocument && (
+        <DocumentViewer
+          documentId={complaintDocument.id}
+          caseId={caseId}
+          open={isViewingComplaint}
+          onClose={() => setIsViewingComplaint(false)}
+        />
       )}
     </DashboardLayout>
   );
