@@ -62,6 +62,7 @@ export default function OnboardingPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
 
   // Personal info form
   const personalInfoForm = useForm<PersonalInfoValues>({
@@ -83,17 +84,70 @@ export default function OnboardingPage() {
     },
   });
 
-  // Update form values when user data becomes available
+  // Check if the user is a client and skip onboarding if so
   useEffect(() => {
-    if (user) {
-      personalInfoForm.reset({
-        email: user.email || "",
-        name: user.user_metadata?.name || "",
-        title: user.user_metadata?.title || "",
-        phone: user.user_metadata?.phone || "",
-      });
-    }
-  }, [user, personalInfoForm]);
+    const checkUserType = async () => {
+      if (user) {
+        // Check user metadata first for user_type
+        if (user.user_metadata && 'user_type' in user.user_metadata) {
+          const userType = user.user_metadata.user_type as string;
+          
+          if (userType === 'client') {
+            // For clients, mark onboarding as completed and redirect to client dashboard
+            try {
+              // Update profile to mark onboarding as completed
+              await updateProfile({
+                onboarding_completed: true,
+              });
+              
+              // Set localStorage flag
+              localStorage.setItem(`doculaw_onboarding_${user.id}`, 'completed');
+              
+              // Redirect to client dashboard
+              navigate("/client-dashboard");
+              return;
+            } catch (error) {
+              console.error("Error skipping client onboarding:", error);
+            }
+          }
+        } else {
+          // If not in metadata, check if a client record exists for this email
+          try {
+            const { data: clientData } = await supabase
+              .from('clients')
+              .select('id')
+              .eq('email', user.email)
+              .single();
+            
+            if (clientData) {
+              // This is a client user, mark onboarding as completed and redirect
+              await updateProfile({
+                onboarding_completed: true,
+              });
+              
+              localStorage.setItem(`doculaw_onboarding_${user.id}`, 'completed');
+              navigate("/client-dashboard");
+              return;
+            }
+          } catch (error) {
+            // Error likely means no client record exists - continue with lawyer onboarding
+            console.error("Error checking client status:", error);
+          }
+        }
+
+        // Update form values for lawyers
+        personalInfoForm.reset({
+          email: user.email || "",
+          name: user.user_metadata?.name || "",
+          title: user.user_metadata?.title || "",
+          phone: user.user_metadata?.phone || "",
+        });
+      }
+      setIsChecking(false);
+    };
+
+    checkUserType();
+  }, [user, navigate, updateProfile, personalInfoForm]);
 
   const handleSubmitPersonalInfo = async (data: PersonalInfoValues) => {
     setIsSubmitting(true);
@@ -173,6 +227,15 @@ export default function OnboardingPage() {
       setIsSubmitting(false);
     }
   };
+
+  // Show loading state while checking user type
+  if (isChecking) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-doculaw-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
