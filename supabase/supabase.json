@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "deploy": {
+      "entrypoint": [
+        "create-client-user/index.ts",
+        "send-client-invitation/index.ts",
+        "delete-client-user/index.ts"
+      ],
+      "shared": [
+        "_shared/cors.ts"
+      ]
+    }
+  }
+} 

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -30,8 +29,8 @@ const formSchema = z.object({
   firstName: z.string().min(2, { message: "First name must be at least 2 characters" }),
   lastName: z.string().min(2, { message: "Last name must be at least 2 characters" }),
   email: z.string().email({ message: "Please enter a valid email address" }),
-  phone: z.string().optional(),
-  caseType: z.string().min(1, { message: "Case type is required" }),
+  phone: z.string().min(1, { message: "Phone number is required for the invitation" }),
+  caseType: z.string().min(1, { message: "Preferred case type is required" }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -79,7 +78,18 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
     
     setIsSubmitting(true);
     try {
-      // First, store the client information in our clients table
+      // Get lawyer name (needed for the email)
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+      
+      const lawyerName = profileData?.name || "Your lawyer";
+
+      // Store the client information in our clients table
       const { data: clientData, error: clientError } = await supabase
         .from('clients')
         .insert({
@@ -88,37 +98,92 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
           last_name: data.lastName,
           email: data.email,
           phone: data.phone || null,
-          case_type: data.caseType,
+          case_type: data.caseType, // Store the case type preference, but don't create a case
+          status: 'pending'
         })
         .select()
         .single();
 
       if (clientError) throw clientError;
 
-      // Call the Supabase Edge Function to send the invitation
-      const { data: inviteData, error: inviteError } = await supabase.functions.invoke("send-client-invitation", {
+      // Generate a secure random password for the new user
+      const tempPassword = Math.random().toString(36).slice(2) + Math.random().toString(36).toUpperCase().slice(2);
+      
+      // Create a user account for the client in Supabase Auth
+      const { data: authData, error: authError } = await supabase.functions.invoke("create-client-user", {
+        body: {
+          email: data.email,
+          password: tempPassword,
+          metadata: {
+            full_name: `${data.firstName} ${data.lastName}`,
+            client_id: clientData.id,
+            lawyer_id: user.id,
+            user_type: 'client'
+          }
+        }
+      });
+
+      if (authError) throw authError;
+
+      // Generate the magic link and send SMS
+      const { data: inviteData, error: magicLinkError } = await supabase.functions.invoke("send-client-invitation", {
         body: {
           email: data.email,
           firstName: data.firstName,
           lastName: data.lastName,
+          lawyerName: lawyerName,
+          clientId: clientData.id,
+          redirectTo: `${window.location.origin}/client-dashboard`,
+          phone: data.phone // Send phone number for SMS
         },
       });
 
-      if (inviteError) throw inviteError;
+      if (magicLinkError) throw magicLinkError;
 
-      toast({
-        title: "Client invited",
-        description: `An invitation email has been sent to ${data.email}`,
-      });
+      // Check if we received a magic link in response
+      if (inviteData && inviteData.magicLink) {
+        try {
+          await navigator.clipboard.writeText(inviteData.magicLink);
+        } catch (clipboardError) {
+          console.error("Failed to copy to clipboard:", clipboardError);
+        }
+        
+        console.info("Magic Link for client:", inviteData.magicLink);
+        
+        // Store the link to local storage for later retrieval
+        localStorage.setItem(`invitationLink_${clientData.id}`, inviteData.magicLink);
+
+        // Check if SMS was sent successfully
+        if (inviteData.success) {
+          toast({
+            title: "Client invited",
+            description: `Client account created and invitation sent via SMS to ${data.phone}`,
+            duration: 10000,
+          });
+        } else {
+          // SMS failed but we have the magic link
+          toast({
+            title: "Client created - SMS sending failed",
+            description: "The client was created but the SMS could not be sent. The magic link has been copied to your clipboard. Please send it to the client manually.",
+            duration: 10000,
+          });
+        }
+      } else {
+        toast({
+          title: "Client created",
+          description: "Client created successfully, but no invitation link was generated.",
+          variant: "destructive",
+        });
+      }
 
       resetForm();
       onSuccess();
       handleClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error inviting client:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to invite client. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to invite client. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -132,7 +197,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
         <DialogHeader>
           <DialogTitle>Invite New Client</DialogTitle>
           <DialogDescription>
-            Send an invitation email to add a new client. They will receive instructions to set up their account.
+            Send an SMS invitation to add a new client to your client list. The client will receive a secure link to access their account. No cases or documents will be created automatically.
           </DialogDescription>
         </DialogHeader>
         
@@ -187,11 +252,14 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Phone Number (Optional)</FormLabel>
+                  <FormLabel>Phone Number</FormLabel>
                   <FormControl>
                     <Input placeholder="(555) 123-4567" {...field} />
                   </FormControl>
                   <FormMessage />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Required for sending the invitation via SMS.
+                  </p>
                 </FormItem>
               )}
             />
@@ -201,7 +269,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
               name="caseType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Case Type</FormLabel>
+                  <FormLabel>Preferred Case Type</FormLabel>
                   <FormControl>
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -219,6 +287,9 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
                     </select>
                   </FormControl>
                   <FormMessage />
+                  <p className="text-xs text-gray-500 mt-1">
+                    This only indicates the client's matter type. You'll need to create cases separately.
+                  </p>
                 </FormItem>
               )}
             />

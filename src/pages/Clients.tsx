@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,13 +5,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Users, AlertCircle } from "lucide-react";
+import { PlusCircle, Users, AlertCircle, MoreHorizontal, Trash2, ExternalLink, Mail } from "lucide-react";
 import ClientsFilters from "@/components/filters/ClientsFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import ClientInviteModal from "@/components/clients/ClientInviteModal";
+import DeleteClientModal from "@/components/clients/DeleteClientModal";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Client {
   id: string;
@@ -24,6 +31,7 @@ interface Client {
   status: string;
   created_at: string;
   cases_count: number;
+  user_id: string | null;
 }
 
 const ClientsPage = () => {
@@ -31,6 +39,8 @@ const ClientsPage = () => {
   const { toast } = useToast();
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
     status: "all",
@@ -53,13 +63,21 @@ const ClientsPage = () => {
       }
       
       // Transform the data to include status and cases_count
-      // In a real app, we would join with the cases table to get actual case counts
-      return data.map(client => ({
-        ...client,
-        name: `${client.first_name} ${client.last_name}`,
-        status: 'Active', // Default status until we have real status tracking
-        cases_count: 0,    // Default count until we implement case counting
-      }));
+      // Note: status is added here since it's not in the database schema
+      return data.map(client => {
+        // Determine status based on user_id or other fields
+        let status = 'Active';
+        if (!client.user_id) {
+          status = 'Pending';
+        }
+        
+        return {
+          ...client,
+          name: `${client.first_name} ${client.last_name}`,
+          status: status, // Add status property
+          cases_count: 0, // Default count until we implement case counting
+        };
+      });
     },
     enabled: !!user
   });
@@ -115,6 +133,60 @@ const ClientsPage = () => {
       title: "Success",
       description: "Client has been invited and added to your clients list.",
     });
+  };
+
+  const handleDeleteClient = (client: Client) => {
+    setClientToDelete(client);
+    setShowDeleteModal(true);
+  };
+
+  const handleClientDeleted = () => {
+    refetch();
+    setShowDeleteModal(false);
+    setClientToDelete(null);
+  };
+
+  const handleResendInvite = async (client: Client) => {
+    if (!user) return;
+    
+    try {
+      // Get lawyer name for the email
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+      
+      const lawyerName = profileData?.name || "Your lawyer";
+
+      // Resend the invitation email
+      const { error } = await supabase.functions.invoke("send-client-invitation", {
+        body: {
+          email: client.email,
+          firstName: client.first_name,
+          lastName: client.last_name,
+          lawyerName: lawyerName,
+          clientId: client.id,
+          redirectTo: `${window.location.origin}/client-dashboard`
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Invitation resent",
+        description: `A new invitation email has been sent to ${client.email}`,
+      });
+    } catch (error) {
+      console.error("Error resending invitation:", error);
+      toast({
+        title: "Error",
+        description: "Failed to resend invitation. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -192,6 +264,7 @@ const ClientsPage = () => {
                     <TableHead>Case Type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Cases</TableHead>
+                    <TableHead className="w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -214,12 +287,53 @@ const ClientsPage = () => {
                       <TableCell>{client.case_type || "Not specified"}</TableCell>
                       <TableCell>
                         <Badge
-                          variant={client.status === "Active" ? "default" : "secondary"}
+                          variant={client.status.toLowerCase() === "active" ? "default" : 
+                                 client.status.toLowerCase() === "invited" ? "secondary" :
+                                 client.status.toLowerCase() === "pending" ? "outline" : "secondary"}
                         >
                           {client.status}
                         </Badge>
                       </TableCell>
                       <TableCell>{client.cases_count} active cases</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              className="cursor-pointer"
+                              onClick={() => window.open(`/clients/${client.id}`, '_blank')}
+                            >
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
+                            
+                            {client.status.toLowerCase() === "invited" && (
+                              <DropdownMenuItem 
+                                className="cursor-pointer"
+                                onClick={() => handleResendInvite(client)}
+                              >
+                                <Mail className="mr-2 h-4 w-4" />
+                                Resend Invitation
+                              </DropdownMenuItem>
+                            )}
+                            
+                            <DropdownMenuSeparator />
+                            
+                            <DropdownMenuItem 
+                              className="cursor-pointer text-red-600"
+                              onClick={() => handleDeleteClient(client)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete Client
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -233,6 +347,13 @@ const ClientsPage = () => {
         open={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         onSuccess={handleClientInvited}
+      />
+      
+      <DeleteClientModal
+        open={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onSuccess={handleClientDeleted}
+        client={clientToDelete}
       />
     </DashboardLayout>
   );
