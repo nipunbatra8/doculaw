@@ -264,7 +264,7 @@ const ClientsPage = () => {
                     <TableHead>Case Type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Cases</TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
+                    {/* <TableHead className="w-[80px]">Actions</TableHead> */}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -295,7 +295,7 @@ const ClientsPage = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>{client.cases_count} active cases</TableCell>
-                      <TableCell>
+                      {/* <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -303,16 +303,16 @@ const ClientsPage = () => {
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem 
+                          <DropdownMenuContent align="end"> */}
+                            {/* <DropdownMenuItem 
                               className="cursor-pointer"
                               onClick={() => window.open(`/clients/${client.id}`, '_blank')}
                             >
                               <ExternalLink className="mr-2 h-4 w-4" />
                               View Details
-                            </DropdownMenuItem>
+                            </DropdownMenuItem> */}
                             
-                            {client.status.toLowerCase() === "invited" && (
+                            {/* {client.status.toLowerCase() === "invited" && (
                               <DropdownMenuItem 
                                 className="cursor-pointer"
                                 onClick={() => handleResendInvite(client)}
@@ -320,20 +320,20 @@ const ClientsPage = () => {
                                 <Mail className="mr-2 h-4 w-4" />
                                 Resend Invitation
                               </DropdownMenuItem>
-                            )}
+                            )} */}
                             
-                            <DropdownMenuSeparator />
+                            {/* <DropdownMenuSeparator /> */}
                             
-                            <DropdownMenuItem 
+                            {/* <DropdownMenuItem 
                               className="cursor-pointer text-red-600"
                               onClick={() => handleDeleteClient(client)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete Client
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
+                            </DropdownMenuItem> */}
+                          {/* </DropdownMenuContent>
                         </DropdownMenu>
-                      </TableCell>
+                      </TableCell> */}
                     </TableRow>
                   ))}
                 </TableBody>

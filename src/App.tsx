@@ -1,4 +1,3 @@
-
 import React, { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -6,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import RouteGuard from "./components/layout/RouteGuard";
 
 // Pages
 import LandingPage from "./pages/LandingPage";
@@ -56,52 +56,70 @@ const App = () => {
                   </ProtectedRoute>
                 } />
                 
-                {/* Protected routes for lawyers */}
+                {/* Protected routes for lawyers only */}
                 <Route path="/dashboard" element={
                   <ProtectedRoute>
-                    <DashboardPage />
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <DashboardPage />
+                    </RouteGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/clients" element={
                   <ProtectedRoute>
-                    <ClientsPage />
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <ClientsPage />
+                    </RouteGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/settings" element={
                   <ProtectedRoute>
-                    <SettingsPage />
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <SettingsPage />
+                    </RouteGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/archive" element={
                   <ProtectedRoute>
-                    <ArchivePage />
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <ArchivePage />
+                    </RouteGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/case/:caseId" element={
                   <ProtectedRoute>
-                    <CasePage />
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <CasePage />
+                    </RouteGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/discovery-request/:caseId" element={
                   <ProtectedRoute>
-                    <DiscoveryRequestPage />
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <DiscoveryRequestPage />
+                    </RouteGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/discovery-request/:caseId/:type" element={
                   <ProtectedRoute>
-                    <DiscoveryRequestPage />
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <DiscoveryRequestPage />
+                    </RouteGuard>
                   </ProtectedRoute>
                 } />
                 <Route path="/discovery-response/:caseId" element={
                   <ProtectedRoute>
-                    <DiscoveryResponsePage />
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <DiscoveryResponsePage />
+                    </RouteGuard>
                   </ProtectedRoute>
                 } />
                 
-                {/* Client routes */}
+                {/* Client routes - only for clients */}
                 <Route path="/client-dashboard" element={
                   <ProtectedRoute>
-                    <ClientDashboardPage />
+                    <RouteGuard allowedUserTypes={['client']}>
+                      <ClientDashboardPage />
+                    </RouteGuard>
                   </ProtectedRoute>
                 } />
                 
