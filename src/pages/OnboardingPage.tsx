@@ -93,22 +93,9 @@ export default function OnboardingPage() {
           const userType = user.user_metadata.user_type as string;
           
           if (userType === 'client') {
-            // For clients, mark onboarding as completed and redirect to client dashboard
-            try {
-              // Update profile to mark onboarding as completed
-              await updateProfile({
-                onboarding_completed: true,
-              });
-              
-              // Set localStorage flag
-              localStorage.setItem(`doculaw_onboarding_${user.id}`, 'completed');
-              
-              // Redirect to client dashboard
-              navigate("/client-dashboard");
-              return;
-            } catch (error) {
-              console.error("Error skipping client onboarding:", error);
-            }
+            // For clients, simply redirect to client dashboard - no need to mark onboarding as completed
+            navigate("/client-dashboard");
+            return;
           }
         } else {
           // If not in metadata, check if a client record exists for this email
@@ -120,12 +107,7 @@ export default function OnboardingPage() {
               .single();
             
             if (clientData) {
-              // This is a client user, mark onboarding as completed and redirect
-              await updateProfile({
-                onboarding_completed: true,
-              });
-              
-              localStorage.setItem(`doculaw_onboarding_${user.id}`, 'completed');
+              // This is a client user, simply redirect to client dashboard
               navigate("/client-dashboard");
               return;
             }
@@ -147,7 +129,7 @@ export default function OnboardingPage() {
     };
 
     checkUserType();
-  }, [user, navigate, updateProfile, personalInfoForm]);
+  }, [user, navigate, personalInfoForm]);
 
   const handleSubmitPersonalInfo = async (data: PersonalInfoValues) => {
     setIsSubmitting(true);
