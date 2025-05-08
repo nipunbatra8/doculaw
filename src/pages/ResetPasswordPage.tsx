@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -12,28 +11,40 @@ const ResetPasswordPage = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   // Verify the recovery token on page load
   useEffect(() => {
     const checkSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error("Session error:", error);
-        setError("Invalid or expired recovery link. Please request a new password reset.");
-        return;
-      }
-      
-      if (!data.session) {
-        console.error("No session found");
-        setError("Invalid or expired recovery link. Please request a new password reset.");
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("Session error:", error);
+          // Redirect to expired link page instead of showing error in UI
+          navigate("/expired-link");
+          return;
+        }
+        
+        if (!data.session) {
+          console.error("No session found");
+          // Redirect to expired link page instead of showing error in UI
+          navigate("/expired-link");
+          return;
+        }
+
+        // Session is valid
+        setIsLoading(false);
+      } catch (err) {
+        console.error("Error checking session:", err);
+        navigate("/expired-link");
       }
     };
     
     checkSession();
-  }, []);
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +83,15 @@ const ResetPasswordPage = () => {
       setTimeout(() => navigate("/login"), 2000);
     }
   };
+
+  // Show loading state while checking session
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-doculaw-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">

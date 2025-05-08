@@ -17,10 +17,35 @@ const RouteGuard = ({ children, allowedUserTypes }: RouteGuardProps) => {
   const navigate = useNavigate();
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [hasExpiredToken, setHasExpiredToken] = useState(false);
+
+  useEffect(() => {
+    // Check for token expiration
+    const checkTokenValidity = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error && error.message.toLowerCase().includes('expired')) {
+          setHasExpiredToken(true);
+          return;
+        }
+      } catch (error) {
+        console.error("Error checking token validity", error);
+      }
+    };
+    
+    checkTokenValidity();
+  }, []);
 
   useEffect(() => {
     const checkAuthorization = async () => {
       try {
+        // If token is expired, redirect to expired link page
+        if (hasExpiredToken) {
+          navigate('/expired-link');
+          return;
+        }
+        
         if (isLoading) return;
         
         if (!user) {
@@ -89,7 +114,7 @@ const RouteGuard = ({ children, allowedUserTypes }: RouteGuardProps) => {
     };
 
     checkAuthorization();
-  }, [user, isLoading, navigate, allowedUserTypes]);
+  }, [user, isLoading, navigate, allowedUserTypes, hasExpiredToken]);
 
   if (checkingAuth) {
     return (

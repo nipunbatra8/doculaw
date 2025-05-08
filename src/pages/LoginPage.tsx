@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -18,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import BookDemoButton from "@/components/BookDemoButton";
+import { ChevronLeft } from "lucide-react";
 
 // Form validation schema
 const formSchema = z.object({
@@ -63,11 +63,12 @@ export default function LoginPage() {
         description: "Welcome back!",
       });
       navigate("/dashboard");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Login error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Please check your credentials and try again";
       toast({
         title: "Login failed",
-        description: error.message || "Please check your credentials and try again",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -122,6 +123,16 @@ export default function LoginPage() {
               <div className="mt-12">
                 <BookDemoButton variant="white-outline" />
               </div>
+              
+              <div className="mt-8">
+                <Link
+                  to="/"
+                  className="text-white flex items-center justify-center hover:underline"
+                >
+                  <ChevronLeft className="mr-1 h-4 w-4" />
+                  Back to Home
+                </Link>
+              </div>
             </motion.div>
           </div>
         </div>
@@ -142,13 +153,24 @@ export default function LoginPage() {
             <h2 className="text-center text-3xl font-bold text-gray-800">
               Sign in
             </h2>
-            <p className="mt-2 text-center text-sm text-gray-500">
-              Or{" "}
+            
+            {/* Back to home for mobile */}
+            <div className="mt-2 text-center lg:hidden">
               <Link
-                to="/payment"
-                className="font-medium text-doculaw-600 hover:text-doculaw-500"
+                to="/"
+                className="text-doculaw-600 flex items-center justify-center hover:underline"
               >
-                lawyers can sign up here
+                <ChevronLeft className="mr-1 h-4 w-4" />
+                Back to Home
+              </Link>
+            </div>
+            
+            <p className="mt-4 text-center text-sm">
+              <Link
+                to="/client-login"
+                className="font-medium text-doculaw-600 hover:text-doculaw-500 bg-doculaw-50 py-2 px-4 rounded-md inline-block border border-doculaw-100"
+              >
+                Clients click here to sign in
               </Link>
             </p>
           </div>

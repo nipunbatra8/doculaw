@@ -24,6 +24,8 @@ import NotFound from "./pages/NotFound";
 import PaymentPage from "./pages/PaymentPage";
 import ClientSignupPage from "./pages/ClientSignupPage";
 import OnboardingPage from "./pages/OnboardingPage";
+import ClientLoginPage from "./pages/ClientLoginPage";
+import ExpiredLinkPage from "./pages/ExpiredLinkPage";
 
 // Auth provider
 import { AuthProvider } from "./context/AuthContext";
@@ -44,6 +46,8 @@ const App = () => {
                 {/* Public routes */}
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/client-login" element={<ClientLoginPage />} />
+                <Route path="/expired-link" element={<ExpiredLinkPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/payment" element={<PaymentPage />} />
