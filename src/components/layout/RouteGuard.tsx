@@ -74,22 +74,35 @@ const RouteGuard = ({ children, allowedUserTypes }: RouteGuardProps) => {
           }
         }
 
-        // Check if client entry exists for this user's email
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('id')
-          .eq('email', user.email)
-          .single();
-
-        // Set client type if the email matches a client record
-        if (clientData && !userType) {
-          userType = 'client';
+        // Instead of querying clients directly (which may be restricted),
+        // we can check the app_metadata which is set during authentication
+        if (!userType && user.app_metadata && 'role' in user.app_metadata) {
+          userType = user.app_metadata.role as string;
+        }
+        
+        // Check email domain as fallback - clients often have personal emails
+        // while lawyers might use the company domain
+        if (!userType && user.email) {
+          const emailLower = user.email.toLowerCase();
+          
+          // Check if this is a company email (customize this based on your domain)
+          if (emailLower.endsWith('@doculaw.com') || 
+              emailLower.endsWith('@yourfirm.com')) {
+            console.log("Setting user type to lawyer based on email domain");
+            userType = 'lawyer';
+          }
+          
+          // Log for debugging
+          console.log("User email check:", emailLower);
         }
 
         // Default to lawyer if still no type (backward compatibility)
         if (!userType) {
+          console.log("No user type detected, defaulting to lawyer");
           userType = 'lawyer';
         }
+        
+        console.log("Determined user type:", userType);
 
         // Check if current user type is allowed for this route
         if (allowedUserTypes.includes(userType)) {

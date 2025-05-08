@@ -45,40 +45,39 @@ export default function ClientLoginPage() {
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
     try {
-      // Check if the email belongs to a client
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('id, email')
-        .eq('email', data.email)
-        .single();
-
-      if (clientError) {
-        // Email not found in clients table
+      console.log("Attempting client login with email:", data.email);
+      
+      // Use the server-side function to verify and send magic link
+      const { data: functionData, error: functionError } = await supabase.functions.invoke(
+        "client-login",
+        {
+          body: {
+            email: data.email,
+            redirectTo: `${window.location.origin}/client-dashboard`,
+          },
+        }
+      );
+      
+      if (functionError) {
+        console.error("Function error:", functionError);
+        throw new Error(functionError.message || "Unable to process login request");
+      }
+      
+      if (!functionData.success) {
+        console.error("Client login failed:", functionData);
         toast({
           title: "Not a registered client",
-          description: "This email is not registered as a client. Please contact your lawyer for an invitation.",
+          description: functionData.details || "This email is not registered as a client. Please contact your lawyer for an invitation.",
           variant: "destructive",
         });
-        setIsSubmitting(false);
         return;
       }
-
-      // Email exists in clients table, now send a magic link
-      const { error } = await supabase.auth.signInWithOtp({
-        email: data.email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/client-dashboard`,
-          // Magic links that fail (e.g., expired) will be caught by the ProtectedRoute component
-          // which will redirect to the expired link page
-        },
-      });
-
-      if (error) throw error;
-
+      
+      // Success - show the success message
       setIsSubmitted(true);
       toast({
         title: "Magic link sent",
-        description: "Check your email for a link to sign in",
+        description: "Check your email for a link to sign in. If you don't receive it, contact your lawyer to ensure you've been invited.",
       });
     } catch (error: unknown) {
       console.error("Login error:", error);
