@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ClientLayout from "@/components/layout/ClientLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,10 +35,13 @@ import {
   AlertTriangle, 
   PenLine,
   ClipboardCheck,
-  Eye
+  Eye,
+  Mic,
+  Loader2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 // Mock data for client questionnaires
 const questionnairesData = [
@@ -133,6 +135,73 @@ const activeQuestionnaireData = {
   ]
 };
 
+// Add type definitions for Speech Recognition API
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+// Add SpeechRecognition class definition
+declare class SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  grammars: SpeechGrammarList;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onend: () => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+// SpeechGrammarList interface definition
+interface SpeechGrammarList {
+  length: number;
+  item(index: number): SpeechGrammar;
+  [index: number]: SpeechGrammar;
+  addFromURI(src: string, weight?: number): void;
+  addFromString(string: string, weight?: number): void;
+}
+
+// SpeechGrammar interface
+interface SpeechGrammar {
+  src: string;
+  weight: number;
+}
+
+// Add window interface extensions
+declare global {
+  interface Window {
+    SpeechRecognition?: typeof SpeechRecognition;
+    webkitSpeechRecognition?: typeof SpeechRecognition;
+  }
+}
+
 const ClientDashboardPage = () => {
   const [activeQuestionnaire, setActiveQuestionnaire] = useState(activeQuestionnaireData);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -140,11 +209,16 @@ const ClientDashboardPage = () => {
   const [signatureName, setSignatureName] = useState("");
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const currentQuestion = activeQuestionnaire.questions[currentQuestionIndex];
   const completedCount = activeQuestionnaire.questions.filter(q => q.completed).length;
   const completionPercentage = (completedCount / activeQuestionnaire.questions.length) * 100;
+  
+  // Check if speech-to-text is enabled in user settings
+  const isSpeechEnabled = user?.user_metadata?.title === "speech-enabled" || true; // Default to true if not set
   
   const handleAnswerChange = (value: string) => {
     const updatedQuestions = [...activeQuestionnaire.questions];
@@ -169,6 +243,93 @@ const ClientDashboardPage = () => {
   const handlePrevQuestion = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(currentQuestionIndex - 1);
+    }
+  };
+
+  const handleMicrophoneClick = () => {
+    if (!isSpeechEnabled) {
+      toast({
+        title: "Speech-to-text disabled",
+        description: "Enable speech-to-text in your account settings to use this feature.",
+        variant: "default",
+      });
+      return;
+    }
+
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast({
+        title: "Speech recognition not supported",
+        description: "Your browser doesn't support speech recognition. Try using Chrome or Edge.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      setIsRecording(true);
+      
+      // Initialize speech recognition
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      
+      let finalTranscript = currentQuestion.answer;
+      
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interimTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        
+        // Update the answer with current transcription
+        handleAnswerChange(finalTranscript + interimTranscript);
+      };
+      
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+      
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error('Speech recognition error', event.error);
+        setIsRecording(false);
+        
+        toast({
+          title: "Speech recognition error",
+          description: `Error: ${event.error}. Please try again.`,
+          variant: "destructive",
+        });
+      };
+      
+      recognition.start();
+      
+      // Add event to stop recording
+      const stopRecording = () => {
+        recognition.stop();
+        document.removeEventListener('click', stopRecording);
+      };
+      
+      // Stop recording when clicking elsewhere
+      setTimeout(() => {
+        document.addEventListener('click', stopRecording);
+      }, 100);
+      
+    } catch (error) {
+      console.error('Speech recognition error:', error);
+      setIsRecording(false);
+      
+      toast({
+        title: "Speech recognition failed",
+        description: "There was an error initializing speech recognition.",
+        variant: "destructive",
+      });
     }
   };
   
@@ -281,14 +442,53 @@ const ClientDashboardPage = () => {
                       </div>
                       
                       <div className="space-y-2">
-                        <label className="font-medium text-sm">Your Answer:</label>
-                        <Textarea 
-                          value={currentQuestion.answer}
-                          onChange={(e) => handleAnswerChange(e.target.value)}
-                          placeholder="Enter your answer here..."
-                          rows={6}
-                          className="resize-none"
-                        />
+                        <div className="flex justify-between items-center">
+                          <label className="font-medium text-sm">Your Answer:</label>
+                          {isSpeechEnabled && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className={`${isRecording ? 'bg-red-100 text-red-600 border-red-300 animate-pulse' : 'text-doculaw-600 hover:text-doculaw-700 hover:bg-doculaw-50'}`}
+                              onClick={handleMicrophoneClick}
+                              disabled={isRecording}
+                              title="Click to answer with voice"
+                            >
+                              {isRecording ? (
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                              ) : (
+                                <Mic className="h-5 w-5" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Textarea 
+                            value={currentQuestion.answer}
+                            onChange={(e) => handleAnswerChange(e.target.value)}
+                            placeholder="Enter your answer here..."
+                            rows={6}
+                            className="resize-none"
+                          />
+                          {isSpeechEnabled && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className={`absolute right-3 bottom-3 ${isRecording ? 'bg-red-100 text-red-600 border-red-300 animate-pulse' : 'text-gray-500 hover:text-doculaw-600'}`}
+                              onClick={handleMicrophoneClick}
+                              disabled={isRecording}
+                              title="Click to answer with voice"
+                            >
+                              <Mic className="h-5 w-5" />
+                            </Button>
+                          )}
+                        </div>
+                        {isRecording && (
+                          <p className="text-sm text-center text-red-600 animate-pulse">
+                            Listening... Speak clearly and click anywhere to stop.
+                          </p>
+                        )}
                       </div>
                     </div>
                   </CardContent>

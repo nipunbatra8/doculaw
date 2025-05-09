@@ -1,6 +1,5 @@
-
 import { ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { FileText, Settings, LogOut, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,6 +14,7 @@ interface ClientLayoutProps {
 const ClientLayout = ({ children }: ClientLayoutProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Get user metadata, which contains the name property
@@ -24,6 +24,10 @@ const ClientLayout = ({ children }: ClientLayoutProps) => {
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  const isActive = (path: string) => {
+    return location.pathname === path;
   };
 
   return (
@@ -80,7 +84,12 @@ const ClientLayout = ({ children }: ClientLayoutProps) => {
               <li>
                 <Link
                   to="/client-dashboard"
-                  className="flex items-center px-4 py-3 text-sm font-medium rounded-lg bg-doculaw-100 text-doculaw-700"
+                  className={cn(
+                    "flex items-center px-4 py-3 text-sm font-medium rounded-lg",
+                    isActive("/client-dashboard")
+                      ? "bg-doculaw-100 text-doculaw-700"
+                      : "text-gray-700 hover:bg-gray-100"
+                  )}
                 >
                   <FileText className="mr-3 h-5 w-5" />
                   My Questionnaires
@@ -89,7 +98,12 @@ const ClientLayout = ({ children }: ClientLayoutProps) => {
               <li>
                 <Link
                   to="/client-settings"
-                  className="flex items-center px-4 py-3 text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-100"
+                  className={cn(
+                    "flex items-center px-4 py-3 text-sm font-medium rounded-lg",
+                    isActive("/client-settings")
+                      ? "bg-doculaw-100 text-doculaw-700"
+                      : "text-gray-700 hover:bg-gray-100"
+                  )}
                 >
                   <Settings className="mr-3 h-5 w-5" />
                   Settings

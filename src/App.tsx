@@ -20,6 +20,7 @@ import ArchivePage from "./pages/ArchivePage";
 import DiscoveryRequestPage from "./pages/DiscoveryRequestPage";
 import DiscoveryResponsePage from "./pages/DiscoveryResponsePage";
 import ClientDashboardPage from "./pages/ClientDashboardPage";
+import ClientSettingsPage from "./pages/ClientSettingsPage";
 import CasePage from "./pages/CasePage";
 import NotFound from "./pages/NotFound";
 import PaymentPage from "./pages/PaymentPage";
@@ -152,6 +153,14 @@ const App = () => {
                   <ProtectedRoute>
                     <RouteGuard allowedUserTypes={['client']}>
                       <ClientDashboardPage />
+                    </RouteGuard>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/client-settings" element={
+                  <ProtectedRoute>
+                    <RouteGuard allowedUserTypes={['client']}>
+                      <ClientSettingsPage />
                     </RouteGuard>
                   </ProtectedRoute>
                 } />
