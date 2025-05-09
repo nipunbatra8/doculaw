@@ -1,6 +1,5 @@
-import { useState } from 'react';
-import { Search, Filter } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from 'react';
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -12,9 +11,15 @@ interface ClientsFiltersProps {
 const ClientsFilters = ({ onSearch, onFilterChange }: ClientsFiltersProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   
-  const handleSearch = () => {
-    onSearch(searchQuery);
-  };
+  // Effect to trigger search when the input changes
+  useEffect(() => {
+    // Debounce function to avoid too many searches while typing
+    const timeoutId = setTimeout(() => {
+      onSearch(searchQuery);
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, onSearch]);
 
   return (
     <div className="mb-6 space-y-4">
@@ -40,11 +45,6 @@ const ClientsFilters = ({ onSearch, onFilterChange }: ClientsFiltersProps) => {
               <SelectItem value="pending">Pending</SelectItem>
             </SelectContent>
           </Select>
-          
-          <Button className="bg-doculaw-500 hover:bg-doculaw-600" onClick={handleSearch}>
-            <Filter className="mr-2 h-4 w-4" />
-            Filter
-          </Button>
         </div>
       </div>
     </div>
