@@ -12,7 +12,6 @@ import { useState } from "react";
 
 const DashboardPage = () => {
   const { user } = useAuth();
-  const [activeTab] = useState("active");
   
   // Get the user metadata
   const userData = user?.user_metadata || {};

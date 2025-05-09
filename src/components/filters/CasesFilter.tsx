@@ -1,0 +1,105 @@
+import { useState, useEffect } from 'react';
+import { Calendar as CalendarIcon, Search } from "lucide-react";
+import { format } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { DateRange } from "react-day-picker";
+
+interface CasesFilterProps {
+  onSearch: (query: string) => void;
+  onFilterChange: (type: string, value: string) => void;
+  onDateChange: (dates: { from?: Date; to?: Date }) => void;
+}
+
+const CasesFilter = ({ onSearch, onFilterChange, onDateChange }: CasesFilterProps) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [date, setDate] = useState<DateRange | undefined>({
+    from: undefined,
+    to: undefined
+  });
+  
+  // Effect to trigger search when query changes
+  useEffect(() => {
+    onSearch(searchQuery);
+  }, [searchQuery, onSearch]);
+
+  const handleDateSelect = (selectedDate: DateRange | undefined) => {
+    setDate(selectedDate);
+    if (selectedDate) {
+      onDateChange({
+        from: selectedDate.from,
+        to: selectedDate.to
+      });
+    } else {
+      onDateChange({});
+    }
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
+      <div className="relative flex-1 w-full">
+        <Input
+          placeholder="Search cases..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 w-full"
+        />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+      </div>
+      
+      <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+        <Select 
+          onValueChange={(value) => onFilterChange('caseType', value)}
+          defaultValue="all"
+        >
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Case Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="Personal Injury">Personal Injury</SelectItem>
+            <SelectItem value="Business Dispute">Business Dispute</SelectItem>
+            <SelectItem value="Family Law">Family Law</SelectItem>
+            <SelectItem value="Estate Planning">Estate Planning</SelectItem>
+            <SelectItem value="Other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+        
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {date?.from ? (
+                date.to ? (
+                  <>
+                    {format(date.from, "LLL dd, y")} - {format(date.to, "LLL dd, y")}
+                  </>
+                ) : (
+                  format(date.from, "LLL dd, y")
+                )
+              ) : (
+                "Date Range"
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              initialFocus
+              mode="range"
+              defaultMonth={date?.from}
+              selected={date}
+              onSelect={handleDateSelect}
+              numberOfMonths={2}
+              className="pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  );
+};
+
+export default CasesFilter; 

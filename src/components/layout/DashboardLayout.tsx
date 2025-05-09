@@ -43,7 +43,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigation = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Clients", path: "/clients", icon: Users },
-    { name: "Archive", path: "/archive", icon: Archive },
     { name: "Settings", path: "/settings", icon: Settings },
   ];
 

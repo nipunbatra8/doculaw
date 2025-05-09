@@ -16,7 +16,6 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import ClientsPage from "./pages/Clients";
 import SettingsPage from "./pages/SettingsPage";
-import ArchivePage from "./pages/ArchivePage";
 import DiscoveryRequestPage from "./pages/DiscoveryRequestPage";
 import DiscoveryResponsePage from "./pages/DiscoveryResponsePage";
 import ClientDashboardPage from "./pages/ClientDashboardPage";
@@ -109,13 +108,6 @@ const App = () => {
                   <ProtectedRoute>
                     <RouteGuard allowedUserTypes={['lawyer']}>
                       <SettingsPage />
-                    </RouteGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/archive" element={
-                  <ProtectedRoute>
-                    <RouteGuard allowedUserTypes={['lawyer']}>
-                      <ArchivePage />
                     </RouteGuard>
                   </ProtectedRoute>
                 } />

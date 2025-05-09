@@ -47,10 +47,11 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isAfter, isBefore, isValid } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import ClientInviteModal from "@/components/clients/ClientInviteModal";
+import CasesFilter from "../filters/CasesFilter";
 
 // Type for case data from Supabase
 type CaseData = {
@@ -100,6 +101,13 @@ const CasesPage = () => {
   const [notifyDialogOpen, setNotifyDialogOpen] = useState(false);
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
   
+  // New state for date range filtering
+  const [filters, setFilters] = useState({
+    caseType: "all",
+    dateFrom: null as Date | null,
+    dateTo: null as Date | null,
+  });
+  
   // Form fields
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -118,7 +126,7 @@ const CasesPage = () => {
 
   // Fetch cases for the logged-in user
   const { data: casesData = [], isLoading, error, refetch } = useQuery({
-    queryKey: ['cases', user?.id, activeTab, searchQuery],
+    queryKey: ['cases', user?.id, activeTab, searchQuery, filters],
     queryFn: async () => {
       if (!user) return [];
       
@@ -144,13 +152,35 @@ const CasesPage = () => {
       if (error) throw error;
       
       // Enhance data with additional UI fields
-      return data.map((caseItem: CaseData) => ({
+      let enhancedData = data.map((caseItem: CaseData) => ({
         ...caseItem,
         lastActivity: formatRelativeTime(caseItem.updated_at),
         caseNumber: `CV-${new Date(caseItem.created_at).getFullYear()}-${caseItem.id.substring(0, 5)}`,
         court: getCourt(caseItem.case_type),
         filedDate: format(parseISO(caseItem.created_at), 'MMM d, yyyy')
       }));
+      
+      // Apply date range filter in memory (since we can't do this in Supabase query)
+      if (filters.dateFrom && isValid(filters.dateFrom)) {
+        enhancedData = enhancedData.filter((c: CaseData) => {
+          const createdDate = parseISO(c.created_at);
+          return isAfter(createdDate, filters.dateFrom as Date) || createdDate.getTime() === (filters.dateFrom as Date).getTime();
+        });
+      }
+
+      if (filters.dateTo && isValid(filters.dateTo)) {
+        enhancedData = enhancedData.filter((c: CaseData) => {
+          const createdDate = parseISO(c.created_at);
+          return isBefore(createdDate, filters.dateTo as Date) || createdDate.getTime() === (filters.dateTo as Date).getTime();
+        });
+      }
+      
+      // Apply case type filter
+      if (filters.caseType !== "all") {
+        enhancedData = enhancedData.filter((c: CaseData) => c.case_type === filters.caseType);
+      }
+      
+      return enhancedData;
     },
     enabled: !!user
   });
@@ -407,45 +437,77 @@ const CasesPage = () => {
     setNotifyDialogOpen(false);
   };
 
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  const handleFilterChange = (type: string, value: string) => {
+    setFilters({ ...filters, [type]: value });
+  };
+
+  const handleDateChange = (dates: { from?: Date; to?: Date }) => {
+    setFilters({
+      ...filters,
+      dateFrom: dates.from || null,
+      dateTo: dates.to || null,
+    });
+  };
+
   return (
-    <div>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Cases</h1>
-            <p className="text-gray-600 mt-1">Manage your legal cases and discovery workflows</p>
-          </div>
-          <Button 
-            className="bg-doculaw-500 hover:bg-doculaw-600 text-white"
-            onClick={() => setIsCreateCaseModalOpen(true)}
-          >
-            <PlusCircle className="h-4 w-4 mr-2" />
-            New Case
-          </Button>
-        </div>
+    <div className="grid gap-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Cases</h2>
+        <Button
+          onClick={() => setIsCreateCaseModalOpen(true)}
+          className="bg-doculaw-500 hover:bg-doculaw-600"
+        >
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Add Case
+        </Button>
+      </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-            <Input
-              placeholder="Search cases by name, client, or number..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex flex-col lg:flex-row items-center space-y-4 lg:space-y-0 gap-4">
+            <div className="w-full lg:w-3/4">
+              <CasesFilter
+                onSearch={handleSearch}
+                onFilterChange={handleFilterChange}
+                onDateChange={handleDateChange}
+              />
+            </div>
+            
+            <div className="w-full lg:w-1/4">
+              <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid grid-cols-3 w-full">
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="active">Active</TabsTrigger>
+                  <TabsTrigger value="inactive">Inactive</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
-          <Tabs defaultValue="all" className="flex-none" onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="active">Active</TabsTrigger>
-              <TabsTrigger value="pending">Pending</TabsTrigger>
-              <TabsTrigger value="inactive">Inactive</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
-        <Card>
-          <CardContent className="p-0">
+        </CardContent>
+        
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-doculaw-500"></div>
+            </div>
+          ) : casesData.length === 0 ? (
+            <div className="text-center py-12">
+              <FileText className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-1">No cases found</h3>
+              <p className="text-gray-500 mb-4">Get started by creating your first case.</p>
+              <Button
+                onClick={() => setIsCreateCaseModalOpen(true)}
+                className="bg-doculaw-500 hover:bg-doculaw-600"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Case
+              </Button>
+            </div>
+          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -459,116 +521,102 @@ const CasesPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center">
-                      Loading cases...
+                {casesData.map((caseItem: CaseData) => (
+                  <TableRow key={caseItem.id} className="cursor-pointer hover:bg-gray-50" onClick={() => handleCaseClick(caseItem)}>
+                    <TableCell className="font-medium">{caseItem.name}</TableCell>
+                    <TableCell>
+                      {caseItem.clients && caseItem.clients.length > 0 ? 
+                        `${caseItem.clients.length} client(s)` : 
+                        "No clients"}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">{caseItem.case_type}</TableCell>
+                    <TableCell className="hidden md:table-cell">{caseItem.caseNumber}</TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        caseItem.status === "Active" ? "default" : 
+                        caseItem.status === "Pending" ? "secondary" : 
+                        "outline"
+                      }>
+                        {caseItem.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">{caseItem.lastActivity}</TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/discovery-request/${caseItem.id}`);
+                          }}>
+                            <FileText className="h-4 w-4 mr-2" />
+                            Propound Discovery Request
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/discovery-response/${caseItem.id}`);
+                          }}>
+                            <FileText className="h-4 w-4 mr-2" />
+                            Draft Discovery Response
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCase(caseItem);
+                            setNotifyDialogOpen(true);
+                          }}>
+                            <Send className="h-4 w-4 mr-2" />
+                            Notify Client
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCase(caseItem);
+                            setClientDialogOpen(true);
+                          }}>
+                            <Users className="h-4 w-4 mr-2" />
+                            Add Client
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/case/${caseItem.id}`);
+                          }}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit Case
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCase(caseItem);
+                            setArchiveConfirmOpen(true);
+                          }}>
+                            <Archive className="h-4 w-4 mr-2" />
+                            Archive Case
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCase(caseItem);
+                              setDeleteConfirmOpen(true);
+                            }}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Case
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ) : casesData.length > 0 ? (
-                  casesData.map((caseItem: CaseData) => (
-                    <TableRow key={caseItem.id} className="cursor-pointer hover:bg-gray-50" onClick={() => handleCaseClick(caseItem)}>
-                      <TableCell className="font-medium">{caseItem.name}</TableCell>
-                      <TableCell>
-                        {caseItem.clients && caseItem.clients.length > 0 ? 
-                          `${caseItem.clients.length} client(s)` : 
-                          "No clients"}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">{caseItem.case_type}</TableCell>
-                      <TableCell className="hidden md:table-cell">{caseItem.caseNumber}</TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          caseItem.status === "Active" ? "default" : 
-                          caseItem.status === "Pending" ? "secondary" : 
-                          "outline"
-                        }>
-                          {caseItem.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">{caseItem.lastActivity}</TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/discovery-request/${caseItem.id}`);
-                            }}>
-                              <FileText className="h-4 w-4 mr-2" />
-                              Propound Discovery Request
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/discovery-response/${caseItem.id}`);
-                            }}>
-                              <FileText className="h-4 w-4 mr-2" />
-                              Draft Discovery Response
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedCase(caseItem);
-                              setNotifyDialogOpen(true);
-                            }}>
-                              <Send className="h-4 w-4 mr-2" />
-                              Notify Client
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedCase(caseItem);
-                              setClientDialogOpen(true);
-                            }}>
-                              <Users className="h-4 w-4 mr-2" />
-                              Add Client
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/case/${caseItem.id}`);
-                            }}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit Case
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedCase(caseItem);
-                              setArchiveConfirmOpen(true);
-                            }}>
-                              <Archive className="h-4 w-4 mr-2" />
-                              Archive Case
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedCase(caseItem);
-                                setDeleteConfirmOpen(true);
-                              }}
-                              className="text-red-600"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete Case
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-6 text-gray-500">
-                      No cases found. Try adjusting your search or filters.
-                    </TableCell>
-                  </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Case Details Dialog */}
       <Dialog open={caseDetailsOpen} onOpenChange={setCaseDetailsOpen}>
