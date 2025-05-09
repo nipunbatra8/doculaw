@@ -53,7 +53,7 @@ export default function ClientLoginPage() {
         {
           body: {
             email: data.email,
-            redirectTo: `${window.location.origin}/client-dashboard`,
+            redirectTo: `${window.location.origin}/auth/callback`,
           },
         }
       );

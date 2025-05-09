@@ -62,7 +62,7 @@ serve(async (req) => {
       email: normalizedEmail,
       options: {
         shouldCreateUser: false,
-        redirectTo: redirectTo || `${new URL(req.url).origin}/client-dashboard`,
+        redirectTo: redirectTo || `${new URL(req.url).origin}/auth/callback`,
         // Set user metadata to ensure they're identified as a client
         data: {
           user_type: 'client'

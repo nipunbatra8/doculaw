@@ -72,10 +72,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Check if user needs to complete onboarding
   useEffect(() => {
-    if (user && profile) {
+    if (!user) return;
+    
+    // Check if this is a client user based on metadata
+    const isClient = 
+      (user.user_metadata && user.user_metadata.user_type === 'client') || 
+      (user.app_metadata && user.app_metadata.role === 'client');
+    
+    // Clients don't need onboarding, so set needsOnboarding to false for them
+    if (isClient) {
+      console.log('User is a client, skipping onboarding check');
+      setNeedsOnboarding(false);
+      return;
+    }
+    
+    // For non-client users (lawyers), check profile and onboarding status
+    if (profile) {
       // If profile exists but onboarding is not completed, user needs to complete onboarding
       setNeedsOnboarding(!profile.onboarding_completed);
-    } else if (user && !profile) {
+    } else {
       // If user exists but profile doesn't exist, user needs to complete onboarding
       setNeedsOnboarding(true);
     }
@@ -83,6 +98,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = async (userId: string) => {
     try {
+      // First check if this user is a client based on session
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        const isClient = 
+          (user.user_metadata && user.user_metadata.user_type === 'client') || 
+          (user.app_metadata && user.app_metadata.role === 'client');
+        
+        // If this is a client user, skip profile fetching
+        if (isClient) {
+          console.log('User is a client, skipping profile fetch');
+          setNeedsOnboarding(false); // Clients don't need onboarding
+          return;
+        }
+      }
+      
+      // For non-client users, fetch profile as usual
       const { data, error } = await supabase
         .from('profiles')
         .select('*')

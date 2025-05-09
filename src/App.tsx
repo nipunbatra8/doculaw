@@ -1,11 +1,12 @@
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import RouteGuard from "./components/layout/RouteGuard";
+import HandleMagicLink from "./components/auth/HandleMagicLink";
 
 // Pages
 import LandingPage from "./pages/LandingPage";
@@ -30,6 +31,30 @@ import ExpiredLinkPage from "./pages/ExpiredLinkPage";
 // Auth provider
 import { AuthProvider } from "./context/AuthContext";
 
+// Hash fragment error handler
+const HashErrorHandler = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  useEffect(() => {
+    // Check for error parameters in the URL hash
+    if (location.hash) {
+      // Convert hash to URLSearchParams for easier parsing
+      const hashParams = new URLSearchParams(location.hash.substring(1));
+      const error = hashParams.get('error');
+      const errorCode = hashParams.get('error_code');
+      
+      // If there's an error in the hash, redirect to expired link page
+      if (error === 'access_denied' || errorCode === 'otp_expired') {
+        console.log('Detected auth error in URL hash:', { error, errorCode });
+        navigate('/expired-link', { replace: true });
+      }
+    }
+  }, [location.hash, navigate]);
+  
+  return null;
+};
+
 // Create a client
 const queryClient = new QueryClient();
 
@@ -42,6 +67,7 @@ const App = () => {
             <Toaster />
             <Sonner />
             <BrowserRouter>
+              <HashErrorHandler />
               <Routes>
                 {/* Public routes */}
                 <Route path="/" element={<LandingPage />} />
@@ -52,6 +78,9 @@ const App = () => {
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/payment" element={<PaymentPage />} />
                 <Route path="/client-signup" element={<ClientSignupPage />} />
+                
+                {/* Auth callback route */}
+                <Route path="/auth/callback" element={<HandleMagicLink />} />
                 
                 {/* Onboarding route */}
                 <Route path="/onboarding" element={

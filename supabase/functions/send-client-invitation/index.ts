@@ -153,7 +153,7 @@ serve(async (req) => {
       type: 'magiclink',
       email,
       options: {
-        redirectTo: `${redirectTo}?clientId=${clientId}`,
+        redirectTo: `${new URL(req.url).origin}/auth/callback?clientId=${clientId}`,
       },
     })
 
