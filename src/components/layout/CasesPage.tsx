@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -43,19 +42,21 @@ import {
   Edit, 
   Trash2, 
   Archive, 
-  AlertTriangle 
+  AlertTriangle,
+  UserPlus
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { format, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import ClientInviteModal from "@/components/clients/ClientInviteModal";
 
 // Type for case data from Supabase
 type CaseData = {
   id: string;
   name: string;
-  client: string | null;
+  clients: string[] | null; // Array of client UUIDs
   case_type: string | null;
   status: string;
   created_at: string;
@@ -68,6 +69,21 @@ type CaseData = {
   court?: string;
   filedDate?: string;
 };
+
+// Define the Client interface
+interface Client {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string | null;
+  case_type: string | null;
+  created_at: string;
+  user_id: string | null;
+  lawyer_id: string;
+  // For display purposes
+  fullName?: string;
+}
 
 const CasesPage = () => {
   const navigate = useNavigate();
@@ -91,6 +107,15 @@ const CasesPage = () => {
   const [notificationSubject, setNotificationSubject] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
 
+  // New state variables
+  const [clientSearchQuery, setClientSearchQuery] = useState<string>("");
+  const [availableClients, setAvailableClients] = useState<Client[]>([]);
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [isLoadingClients, setIsLoadingClients] = useState<boolean>(false);
+  const [caseClientDetails, setCaseClientDetails] = useState<Client[]>([]);
+  const [isLoadingCaseClients, setIsLoadingCaseClients] = useState<boolean>(false);
+  const [clientInviteModalOpen, setClientInviteModalOpen] = useState<boolean>(false);
+
   // Fetch cases for the logged-in user
   const { data: casesData = [], isLoading, error, refetch } = useQuery({
     queryKey: ['cases', user?.id, activeTab, searchQuery],
@@ -110,7 +135,7 @@ const CasesPage = () => {
       // Apply search query
       if (searchQuery) {
         query = query.or(
-          `name.ilike.%${searchQuery}%,client.ilike.%${searchQuery}%,case_type.ilike.%${searchQuery}%`
+          `name.ilike.%${searchQuery}%,case_type.ilike.%${searchQuery}%`
         );
       }
       
@@ -231,13 +256,13 @@ const CasesPage = () => {
   };
 
   const handleAddClient = async () => {
-    if (!selectedCase || !clientName) return;
+    if (!selectedCase || selectedClients.length === 0) return;
     
     try {
       const { error } = await supabase
         .from('cases')
         .update({
-          client: clientName,
+          clients: selectedClients,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedCase.id);
@@ -245,29 +270,138 @@ const CasesPage = () => {
       if (error) throw error;
       
       toast({
-        title: "Client Added",
-        description: `${clientName} has been added as the client for this case.`,
+        title: "Clients Added",
+        description: `${selectedClients.length} client(s) have been added to this case.`,
       });
       
       setClientDialogOpen(false);
+      setSelectedClients([]);
+      setClientSearchQuery("");
       refetch();
     } catch (error) {
-      console.error('Error adding client:', error);
+      console.error('Error adding clients:', error);
       toast({
         title: "Error",
-        description: "Failed to add the client. Please try again.",
+        description: "Failed to add the client(s). Please try again.",
         variant: "destructive"
       });
     }
   };
 
+  const searchClients = async (query: string) => {
+    if (!user) return;
+    
+    setIsLoadingClients(true);
+    try {
+      // Search for clients belonging to this lawyer
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('lawyer_id', user.id)
+        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%`)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Process clients to include full name for display
+      const clientsWithFullName = (data || []).map(client => ({
+        ...client,
+        fullName: `${client.first_name} ${client.last_name}`
+      }));
+      
+      setAvailableClients(clientsWithFullName);
+    } catch (error) {
+      console.error('Error searching clients:', error);
+      toast({
+        title: "Error",
+        description: "Failed to search for clients. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingClients(false);
+    }
+  };
+
+  const fetchCaseClientDetails = async (caseItem: CaseData) => {
+    if (!user || !caseItem?.clients || caseItem.clients.length === 0) {
+      setCaseClientDetails([]);
+      return;
+    }
+    
+    setIsLoadingCaseClients(true);
+    try {
+      // Fetch details for all clients assigned to this case
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .in('id', caseItem.clients);
+      
+      if (error) throw error;
+      
+      // Process clients to include full name for display
+      const clientsWithFullName = (data || []).map(client => ({
+        ...client,
+        fullName: `${client.first_name} ${client.last_name}`
+      }));
+      
+      setCaseClientDetails(clientsWithFullName);
+    } catch (error) {
+      console.error('Error fetching case client details:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load client information. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingCaseClients(false);
+    }
+  };
+
+  const handleClientInvited = () => {
+    toast({
+      title: "Success",
+      description: "Client has been invited. You can now add them to this case.",
+    });
+    setClientInviteModalOpen(false);
+    // Refresh the clients list
+    searchClients("");
+  };
+
+  useEffect(() => {
+    if (clientDialogOpen && selectedCase) {
+      searchClients("");
+      // Initialize selected clients from case
+      if (selectedCase.clients) {
+        setSelectedClients(selectedCase.clients);
+      } else {
+        setSelectedClients([]);
+      }
+    }
+  }, [clientDialogOpen, selectedCase]);
+
+  useEffect(() => {
+    if (selectedCase) {
+      fetchCaseClientDetails(selectedCase);
+    }
+  }, [selectedCase]);
+
   const handleSendNotification = () => {
     if (!selectedCase) return;
+    
+    if (!selectedCase.clients || selectedCase.clients.length === 0) {
+      toast({
+        title: "No Clients Assigned",
+        description: "Please add clients to this case first.",
+        variant: "destructive"
+      });
+      setNotifyDialogOpen(false);
+      return;
+    }
     
     // In a real app, this would be an API call to send an email/message
     toast({
       title: "Notification Sent",
-      description: `A notification has been sent to ${selectedCase.client || 'the client'}.`,
+      description: `A notification has been sent to ${caseClientDetails.length} client(s).`,
     });
     
     setNotifyDialogOpen(false);
@@ -335,7 +469,11 @@ const CasesPage = () => {
                   casesData.map((caseItem: CaseData) => (
                     <TableRow key={caseItem.id} className="cursor-pointer hover:bg-gray-50" onClick={() => handleCaseClick(caseItem)}>
                       <TableCell className="font-medium">{caseItem.name}</TableCell>
-                      <TableCell>{caseItem.client}</TableCell>
+                      <TableCell>
+                        {caseItem.clients && caseItem.clients.length > 0 ? 
+                          `${caseItem.clients.length} client(s)` : 
+                          "No clients"}
+                      </TableCell>
                       <TableCell className="hidden md:table-cell">{caseItem.case_type}</TableCell>
                       <TableCell className="hidden md:table-cell">{caseItem.caseNumber}</TableCell>
                       <TableCell>
@@ -481,7 +619,7 @@ const CasesPage = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-500">Client Name:</span>
-                    <span className="font-medium">{selectedCase.client || "No client assigned"}</span>
+                    <span className="font-medium">{selectedCase.clients ? selectedCase.clients.length.toString() : "No clients"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Contact:</span>
@@ -713,7 +851,7 @@ const CasesPage = () => {
                 Notify Client
               </DialogTitle>
               <DialogDescription>
-                Send a notification to {selectedCase.client || "the client"} regarding this case.
+                Send a notification to {selectedCase.clients ? selectedCase.clients.length.toString() : "the clients"} regarding this case.
               </DialogDescription>
             </DialogHeader>
             
@@ -735,7 +873,7 @@ const CasesPage = () => {
                 <Textarea
                   value={notificationMessage}
                   onChange={(e) => setNotificationMessage(e.target.value)}
-                  placeholder="Enter your message to the client..."
+                  placeholder="Enter your message to the clients..."
                   className="min-h-[120px]"
                 />
               </div>
@@ -768,67 +906,152 @@ const CasesPage = () => {
             <DialogHeader>
               <DialogTitle className="flex items-center">
                 <Users className="h-5 w-5 mr-2" />
-                Add Client
+                Add Clients to Case
               </DialogTitle>
               <DialogDescription>
-                Add client information to this case.
+                Select existing clients to add to this case.
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-4 py-2">
+            <div className="space-y-6 py-2">
+              {/* Search existing clients */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Client Name
-                </label>
-                <Input
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Enter client name"
-                />
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Search Clients
+                  </label>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => {
+                      setClientDialogOpen(false);
+                      setClientInviteModalOpen(true);
+                    }}
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Invite New Client
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    placeholder="Search by name or email..."
+                    value={clientSearchQuery}
+                    onChange={(e) => {
+                      setClientSearchQuery(e.target.value);
+                      searchClients(e.target.value);
+                    }}
+                  />
+                  
+                  <div className="border rounded-md max-h-60 overflow-y-auto">
+                    {isLoadingClients ? (
+                      <div className="text-center p-2 text-gray-500">Loading clients...</div>
+                    ) : availableClients.length > 0 ? (
+                      <div className="divide-y">
+                        {availableClients.map(client => (
+                          <div 
+                            key={client.id}
+                            className="flex items-center p-2 hover:bg-gray-50"
+                          >
+                            <input
+                              type="checkbox"
+                              id={`client-${client.id}`}
+                              checked={selectedClients.includes(client.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedClients(prev => [...prev, client.id]);
+                                } else {
+                                  setSelectedClients(prev => 
+                                    prev.filter(id => id !== client.id)
+                                  );
+                                }
+                              }}
+                              className="mr-2 h-4 w-4"
+                            />
+                            <label
+                              htmlFor={`client-${client.id}`}
+                              className="flex-1 flex flex-col cursor-pointer"
+                            >
+                              <span className="font-medium">
+                                {client.first_name} {client.last_name}
+                              </span>
+                              <span className="text-sm text-gray-500">
+                                {client.email}
+                              </span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center p-2 text-gray-500">
+                        {clientSearchQuery 
+                          ? "No clients found matching your search." 
+                          : "No clients available. Click 'Invite New Client' to add one."}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <Input
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="client@example.com"
-                  type="email"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone Number
-                </label>
-                <Input
-                  value={clientPhone}
-                  onChange={(e) => setClientPhone(e.target.value)}
-                  placeholder="(555) 123-4567"
-                  type="tel"
-                />
-              </div>
+              
+              {/* Selected clients summary */}
+              {selectedClients.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Selected Clients ({selectedClients.length})
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedClients.map((clientId) => {
+                      const client = availableClients.find(c => c.id === clientId);
+                      return (
+                        <Badge key={clientId} variant="secondary" className="flex items-center gap-1">
+                          {client ? `${client.first_name} ${client.last_name}` : clientId}
+                          <button 
+                            onClick={() => setSelectedClients(prev => 
+                              prev.filter(id => id !== clientId)
+                            )}
+                            className="ml-1 hover:text-red-500"
+                            aria-label="Remove client"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
             
             <DialogFooter className="flex flex-col sm:flex-row gap-2">
               <Button 
                 variant="outline" 
                 className="sm:flex-1"
-                onClick={() => setClientDialogOpen(false)}
+                onClick={() => {
+                  setClientDialogOpen(false);
+                  setSelectedClients([]);
+                  setClientSearchQuery("");
+                }}
               >
                 Cancel
               </Button>
               <Button 
                 className="sm:flex-1"
-                disabled={!clientName}
+                disabled={selectedClients.length === 0}
                 onClick={handleAddClient}
               >
-                Add Client
+                Add to Case
               </Button>
             </DialogFooter>
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Client Invite Modal */}
+      <ClientInviteModal 
+        open={clientInviteModalOpen}
+        onClose={() => setClientInviteModalOpen(false)}
+        onSuccess={handleClientInvited}
+      />
 
       {/* Create Case Modal */}
       <CreateCaseModal 
