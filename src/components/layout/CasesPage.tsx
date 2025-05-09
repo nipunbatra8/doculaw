@@ -98,6 +98,7 @@ const CasesPage = () => {
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [unarchiveConfirmOpen, setUnarchiveConfirmOpen] = useState(false);
   const [notifyDialogOpen, setNotifyDialogOpen] = useState(false);
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
   
@@ -136,8 +137,11 @@ const CasesPage = () => {
         .eq('user_id', user.id);
       
       // Apply tab filter
-      if (activeTab !== 'all') {
-        query = query.eq('status', activeTab.charAt(0).toUpperCase() + activeTab.slice(1));
+      if (activeTab === 'active') {
+        query = query.eq('status', 'Active').is('archived_at', null);
+      } else if (activeTab === 'inactive') {
+        // For inactive tab, include archived cases or those with inactive status
+        query = query.or('status.eq.Inactive,archived_at.not.is.null');
       }
       
       // Apply search query
@@ -280,6 +284,39 @@ const CasesPage = () => {
       toast({
         title: "Error",
         description: "Failed to archive the case. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleUnarchiveCase = async () => {
+    if (!selectedCase) return;
+    
+    try {
+      const { error } = await supabase
+        .from('cases')
+        .update({
+          archived_at: null,
+          status: 'Active',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedCase.id);
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Case Unarchived",
+        description: "The case has been restored from the archive.",
+      });
+      
+      setUnarchiveConfirmOpen(false);
+      setCaseDetailsOpen(false);
+      refetch();
+    } catch (error) {
+      console.error('Error unarchiving case:', error);
+      toast({
+        title: "Error",
+        description: "Failed to unarchive the case. Please try again.",
         variant: "destructive"
       });
     }
@@ -522,8 +559,15 @@ const CasesPage = () => {
               </TableHeader>
               <TableBody>
                 {casesData.map((caseItem: CaseData) => (
-                  <TableRow key={caseItem.id} className="cursor-pointer hover:bg-gray-50" onClick={() => handleCaseClick(caseItem)}>
-                    <TableCell className="font-medium">{caseItem.name}</TableCell>
+                  <TableRow key={caseItem.id} className={`cursor-pointer hover:bg-gray-50 ${caseItem.archived_at ? 'bg-gray-50' : ''}`} onClick={() => handleCaseClick(caseItem)}>
+                    <TableCell className="font-medium">
+                      {caseItem.name}
+                      {caseItem.archived_at && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">
+                          Archived
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {caseItem.clients && caseItem.clients.length > 0 ? 
                         `${caseItem.clients.length} client(s)` : 
@@ -535,9 +579,10 @@ const CasesPage = () => {
                       <Badge variant={
                         caseItem.status === "Active" ? "default" : 
                         caseItem.status === "Pending" ? "secondary" : 
+                        caseItem.archived_at ? "outline" : 
                         "outline"
                       }>
-                        {caseItem.status}
+                        {caseItem.archived_at ? "Archived" : caseItem.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">{caseItem.lastActivity}</TableCell>
@@ -588,14 +633,25 @@ const CasesPage = () => {
                             <Edit className="h-4 w-4 mr-2" />
                             Edit Case
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCase(caseItem);
-                            setArchiveConfirmOpen(true);
-                          }}>
-                            <Archive className="h-4 w-4 mr-2" />
-                            Archive Case
-                          </DropdownMenuItem>
+                          {caseItem.archived_at ? (
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCase(caseItem);
+                              setUnarchiveConfirmOpen(true);
+                            }}>
+                              <Archive className="h-4 w-4 mr-2" />
+                              Unarchive Case
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCase(caseItem);
+                              setArchiveConfirmOpen(true);
+                            }}>
+                              <Archive className="h-4 w-4 mr-2" />
+                              Archive Case
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem 
                             onClick={(e) => {
                               e.stopPropagation();
@@ -747,16 +803,29 @@ const CasesPage = () => {
                   <Users className="h-4 w-4 mr-2" />
                   Add Client
                 </Button>
-                <Button 
-                  variant="outline"
-                  onClick={() => {
-                    setCaseDetailsOpen(false);
-                    setArchiveConfirmOpen(true);
-                  }}
-                >
-                  <Archive className="h-4 w-4 mr-2" />
-                  Archive
-                </Button>
+                {selectedCase.archived_at ? (
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setCaseDetailsOpen(false);
+                      setUnarchiveConfirmOpen(true);
+                    }}
+                  >
+                    <Archive className="h-4 w-4 mr-2" />
+                    Unarchive
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setCaseDetailsOpen(false);
+                      setArchiveConfirmOpen(true);
+                    }}
+                  >
+                    <Archive className="h-4 w-4 mr-2" />
+                    Archive
+                  </Button>
+                )}
                 <Button 
                   variant="default"
                   className="bg-doculaw-500 hover:bg-doculaw-600"
@@ -883,6 +952,38 @@ const CasesPage = () => {
                 onClick={handleArchiveCase}
               >
                 Archive Case
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* Unarchive Confirmation */}
+      <Dialog open={unarchiveConfirmOpen} onOpenChange={setUnarchiveConfirmOpen}>
+        {selectedCase && (
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center">
+                <Archive className="h-5 w-5 mr-2" />
+                Unarchive Case
+              </DialogTitle>
+              <DialogDescription>
+                Are you sure you want to unarchive the case "{selectedCase.name}"? This will restore it to active status.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button 
+                variant="outline" 
+                className="sm:flex-1"
+                onClick={() => setUnarchiveConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                className="sm:flex-1"
+                onClick={handleUnarchiveCase}
+              >
+                Unarchive Case
               </Button>
             </DialogFooter>
           </DialogContent>

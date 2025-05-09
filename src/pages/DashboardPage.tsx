@@ -18,8 +18,8 @@ const DashboardPage = () => {
   const userName = userData.name || "Counselor";
   const firstName = userName.split(' ')[0];
 
-  // Fetch case statistics
-  const { data: activeCasesCount = 0 } = useQuery({
+  // Fetch active case statistics
+  const { data: activeCasesCount = 0, isLoading: loadingCases } = useQuery({
     queryKey: ['active-cases-count', user?.id],
     queryFn: async () => {
       if (!user) return 0;
@@ -28,10 +28,32 @@ const DashboardPage = () => {
         .from('cases')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .eq('status', 'Active');
+        .eq('status', 'Active')
+        .is('archived_at', null);  // Ensure we only count non-archived cases
       
       if (error) {
         console.error('Error fetching active cases count:', error);
+        return 0;
+      }
+      
+      return count || 0;
+    },
+    enabled: !!user
+  });
+
+  // Fetch active clients count
+  const { data: activeClientsCount = 0, isLoading: loadingClients } = useQuery({
+    queryKey: ['active-clients-count', user?.id],
+    queryFn: async () => {
+      if (!user) return 0;
+      
+      const { count, error } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .eq('lawyer_id', user.id);
+      
+      if (error) {
+        console.error('Error fetching active clients count:', error);
         return 0;
       }
       
@@ -71,7 +93,13 @@ const DashboardPage = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">{activeCasesCount}</div>
+                <div className="text-3xl font-bold">
+                  {loadingCases ? (
+                    <span className="text-gray-400">...</span>
+                  ) : (
+                    activeCasesCount
+                  )}
+                </div>
                 <Briefcase className="h-6 w-6 text-doculaw-500" />
               </div>
               <div className="mt-2 text-xs text-gray-500">
@@ -101,7 +129,13 @@ const DashboardPage = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">18</div>
+                <div className="text-3xl font-bold">
+                  {loadingClients ? (
+                    <span className="text-gray-400">...</span>
+                  ) : (
+                    activeClientsCount
+                  )}
+                </div>
                 <Users className="h-6 w-6 text-doculaw-500" />
               </div>
               <div className="mt-2 text-xs text-gray-500">

@@ -104,6 +104,7 @@ const CasePage = () => {
   const [editMode, setEditMode] = useState<boolean>(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState<boolean>(false);
+  const [unarchiveConfirmOpen, setUnarchiveConfirmOpen] = useState<boolean>(false);
   const [notifyDialogOpen, setNotifyDialogOpen] = useState<boolean>(false);
   const [clientDialogOpen, setClientDialogOpen] = useState<boolean>(false);
   const [clientInviteModalOpen, setClientInviteModalOpen] = useState<boolean>(false);
@@ -363,12 +364,46 @@ const CasePage = () => {
         description: "The case has been moved to the archive.",
       });
       
-      navigate('/archive');
+      setArchiveConfirmOpen(false);
+      navigate('/dashboard');
     } catch (error) {
       console.error('Error archiving case:', error);
       toast({
         title: "Error",
         description: "Failed to archive the case. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Handler for case unarchiving
+  const handleUnarchiveCase = async () => {
+    if (!user || !caseId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('cases')
+        .update({
+          archived_at: null,
+          status: 'Active',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', caseId);
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Case Unarchived",
+        description: "The case has been restored from the archive.",
+      });
+      
+      setUnarchiveConfirmOpen(false);
+      refetch();
+    } catch (error) {
+      console.error('Error unarchiving case:', error);
+      toast({
+        title: "Error",
+        description: "Failed to unarchive the case. Please try again.",
         variant: "destructive"
       });
     }
@@ -589,6 +624,11 @@ const CasePage = () => {
               }>
                 {caseData.status}
               </Badge>
+              {caseData.archived_at && (
+                <Badge variant="outline" className="ml-2">
+                  Archived
+                </Badge>
+              )}
             </div>
             <p className="text-gray-600 mt-1">Case Number: {caseData.caseNumber}</p>
           </div>
@@ -600,13 +640,23 @@ const CasePage = () => {
               <Edit className="h-4 w-4 mr-2" />
               Edit Case
             </Button>
-            <Button 
-              variant="outline"
-              onClick={() => setArchiveConfirmOpen(true)}
-            >
-              <Archive className="h-4 w-4 mr-2" />
-              Archive Case
-            </Button>
+            {caseData.archived_at ? (
+              <Button 
+                variant="outline"
+                onClick={() => setUnarchiveConfirmOpen(true)}
+              >
+                <Archive className="h-4 w-4 mr-2" />
+                Unarchive Case
+              </Button>
+            ) : (
+              <Button 
+                variant="outline"
+                onClick={() => setArchiveConfirmOpen(true)}
+              >
+                <Archive className="h-4 w-4 mr-2" />
+                Archive Case
+              </Button>
+            )}
             <Button 
               variant="destructive"
               onClick={() => setDeleteConfirmOpen(true)}
@@ -1088,6 +1138,36 @@ const CasePage = () => {
               onClick={handleArchiveCase}
             >
               Archive Case
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unarchive Confirmation Dialog */}
+      <Dialog open={unarchiveConfirmOpen} onOpenChange={setUnarchiveConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Archive className="h-5 w-5 mr-2" />
+              Unarchive Case
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to unarchive the case "{caseData.name}"? This will restore it to active status.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline" 
+              className="sm:flex-1"
+              onClick={() => setUnarchiveConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className="sm:flex-1"
+              onClick={handleUnarchiveCase}
+            >
+              Unarchive Case
             </Button>
           </DialogFooter>
         </DialogContent>
