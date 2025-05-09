@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Search, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -38,21 +37,7 @@ const ClientsFilters = ({ onSearch, onFilterChange }: ClientsFiltersProps) => {
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Select onValueChange={(value) => onFilterChange('caseType', value)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Case Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="Personal Injury">Personal Injury</SelectItem>
-              <SelectItem value="Business Dispute">Business Dispute</SelectItem>
-              <SelectItem value="Family Law">Family Law</SelectItem>
-              <SelectItem value="Estate Planning">Estate Planning</SelectItem>
-              <SelectItem value="Other">Other</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
             </SelectContent>
           </Select>
           

@@ -51,8 +51,9 @@ const ArchivePage = () => {
       const { data, error } = await supabase
         .from('cases')
         .select('*')
-        .not('archived_at', 'is', null)
-        .eq('user_id', user?.id);
+        // .not('archived_at', 'is', null)
+        .eq('user_id', user.id)
+        .eq('status', 'Active');
 
       if (error) {
         throw error;

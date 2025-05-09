@@ -976,12 +976,6 @@ const CasePage = () => {
                               <span className="text-gray-500">Status:</span>
                               <Badge>{client.user_id ? "Active" : "Pending"}</Badge>
                             </div>
-                            {client.case_type && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-500">Preferred Case Type:</span>
-                                <span>{client.case_type}</span>
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>

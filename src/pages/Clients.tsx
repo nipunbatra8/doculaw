@@ -5,21 +5,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Users, AlertCircle, MoreHorizontal, Trash2, ExternalLink, Mail } from "lucide-react";
+import { PlusCircle, Users, AlertCircle, MoreHorizontal, Trash2, ExternalLink, Mail, Pencil } from "lucide-react";
 import ClientsFilters from "@/components/filters/ClientsFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import ClientInviteModal from "@/components/clients/ClientInviteModal";
 import DeleteClientModal from "@/components/clients/DeleteClientModal";
+import EditClientModal from "@/components/clients/EditClientModal";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-// import {
-//   DropdownMenu,
-//   DropdownMenuContent,
-//   DropdownMenuItem,
-//   DropdownMenuSeparator,
-//   DropdownMenuTrigger,
-// } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Client {
   id: string;
@@ -27,7 +28,6 @@ interface Client {
   last_name: string;
   email: string;
   phone: string | null;
-  case_type: string | null;
   status: string;
   created_at: string;
   cases_count: number;
@@ -41,10 +41,11 @@ const ClientsPage = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
     status: "all",
-    caseType: "all",
   });
 
   // Fetch clients from the database
@@ -62,8 +63,29 @@ const ClientsPage = () => {
         throw error;
       }
       
+      // Get counts of cases per client
+      const clientsCases: Record<string, number> = {};
+      const { data: casesData, error: casesError } = await supabase
+        .from('cases')
+        .select('id, clients')
+        .eq('user_id', user.id);
+      
+      if (casesError) {
+        console.error("Error fetching cases:", casesError);
+      } else if (casesData) {
+        // Count each client's active cases
+        casesData.forEach(caseItem => {
+          if (caseItem.clients && Array.isArray(caseItem.clients)) {
+            caseItem.clients.forEach(clientId => {
+              if (clientId) {
+                clientsCases[clientId] = (clientsCases[clientId] || 0) + 1;
+              }
+            });
+          }
+        });
+      }
+      
       // Transform the data to include status and cases_count
-      // Note: status is added here since it's not in the database schema
       return data.map(client => {
         // Determine status based on user_id or other fields
         let status = 'Active';
@@ -74,8 +96,8 @@ const ClientsPage = () => {
         return {
           ...client,
           name: `${client.first_name} ${client.last_name}`,
-          status: status, // Add status property
-          cases_count: 0, // Default count until we implement case counting
+          status: status,
+          cases_count: clientsCases[client.id] || 0, // Get the actual case count
         };
       });
     },
@@ -111,11 +133,6 @@ const ClientsPage = () => {
       );
     }
 
-    // Filter by case type
-    if (filters.caseType !== "all") {
-      filtered = filtered.filter((c) => c.case_type === filters.caseType);
-    }
-
     setFilteredClients(filtered);
   };
 
@@ -132,6 +149,21 @@ const ClientsPage = () => {
     toast({
       title: "Success",
       description: "Client has been invited and added to your clients list.",
+    });
+  };
+
+  const handleEditClient = (client: Client) => {
+    setClientToEdit(client);
+    setShowEditModal(true);
+  };
+
+  const handleClientEdited = () => {
+    refetch();
+    setShowEditModal(false);
+    setClientToEdit(null);
+    toast({
+      title: "Success",
+      description: "Client information has been updated.",
     });
   };
 
@@ -261,10 +293,9 @@ const ClientsPage = () => {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Contact</TableHead>
-                    <TableHead>Case Type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Cases</TableHead>
-                    {/* <TableHead className="w-[80px]">Actions</TableHead> */}
+                    <TableHead className="w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -284,7 +315,6 @@ const ClientsPage = () => {
                         <div>{client.email}</div>
                         <div className="text-sm text-gray-500">{client.phone || "No phone"}</div>
                       </TableCell>
-                      <TableCell>{client.case_type || "Not specified"}</TableCell>
                       <TableCell>
                         <Badge
                           variant={client.status.toLowerCase() === "active" ? "default" : 
@@ -295,7 +325,7 @@ const ClientsPage = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>{client.cases_count} active cases</TableCell>
-                      {/* <TableCell>
+                      <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -303,16 +333,16 @@ const ClientsPage = () => {
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end"> */}
-                            {/* <DropdownMenuItem 
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
                               className="cursor-pointer"
-                              onClick={() => window.open(`/clients/${client.id}`, '_blank')}
+                              onClick={() => handleEditClient(client)}
                             >
-                              <ExternalLink className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem> */}
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit Client
+                            </DropdownMenuItem>
                             
-                            {/* {client.status.toLowerCase() === "invited" && (
+                            {client.status.toLowerCase() === "pending" && (
                               <DropdownMenuItem 
                                 className="cursor-pointer"
                                 onClick={() => handleResendInvite(client)}
@@ -320,20 +350,26 @@ const ClientsPage = () => {
                                 <Mail className="mr-2 h-4 w-4" />
                                 Resend Invitation
                               </DropdownMenuItem>
-                            )} */}
+                            )}
                             
-                            {/* <DropdownMenuSeparator /> */}
+                            <DropdownMenuSeparator />
                             
-                            {/* <DropdownMenuItem 
-                              className="cursor-pointer text-red-600"
-                              onClick={() => handleDeleteClient(client)}
+                            <DropdownMenuItem 
+                              className="cursor-pointer text-amber-600"
+                              onClick={() => {
+                                toast({
+                                  title: "Contact Support",
+                                  description: "To delete a client, please contact support. This ensures all associated case data is properly handled.",
+                                  variant: "default",
+                                });
+                              }}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
-                              Delete Client
-                            </DropdownMenuItem> */}
-                          {/* </DropdownMenuContent>
+                              Request Client Deletion
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
                         </DropdownMenu>
-                      </TableCell> */}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -347,6 +383,13 @@ const ClientsPage = () => {
         open={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         onSuccess={handleClientInvited}
+      />
+      
+      <EditClientModal
+        open={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSuccess={handleClientEdited}
+        client={clientToEdit}
       />
       
       <DeleteClientModal
