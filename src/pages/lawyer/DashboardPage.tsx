@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Activity, BarChart2, FileText, Briefcase, ArrowRight, Users, Clock, PlusCircle, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import CasesPage from "../components/layout/CasesPage";
+import CasesPage from "../../components/layout/CasesPage";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";

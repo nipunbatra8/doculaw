@@ -9,24 +9,24 @@ import RouteGuard from "./components/layout/RouteGuard";
 import HandleMagicLink from "./components/auth/HandleMagicLink";
 
 // Pages
-import LandingPage from "./pages/LandingPage";
-import LoginPage from "./pages/LoginPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import DashboardPage from "./pages/DashboardPage";
-import ClientsPage from "./pages/Clients";
-import SettingsPage from "./pages/SettingsPage";
-import DiscoveryRequestPage from "./pages/DiscoveryRequestPage";
-import DiscoveryResponsePage from "./pages/DiscoveryResponsePage";
-import ClientDashboardPage from "./pages/ClientDashboardPage";
-import ClientSettingsPage from "./pages/ClientSettingsPage";
-import CasePage from "./pages/CasePage";
-import NotFound from "./pages/NotFound";
-import PaymentPage from "./pages/PaymentPage";
-import ClientSignupPage from "./pages/ClientSignupPage";
-import OnboardingPage from "./pages/OnboardingPage";
-import ClientLoginPage from "./pages/ClientLoginPage";
-import ExpiredLinkPage from "./pages/ExpiredLinkPage";
+import LandingPage from "./pages/common/LandingPage";
+import LoginPage from "./pages/auth/LoginPage";
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
+import DashboardPage from "./pages/lawyer/DashboardPage";
+import ClientsPage from "./pages/lawyer/Clients";
+import SettingsPage from "./pages/lawyer/SettingsPage";
+import DiscoveryRequestPage from "./pages/discovery/DiscoveryRequestPage";
+import DiscoveryResponsePage from "./pages/discovery/DiscoveryResponsePage";
+import ClientDashboardPage from "./pages/client/ClientDashboardPage";
+import ClientSettingsPage from "./pages/client/ClientSettingsPage";
+import CasePage from "./pages/lawyer/CasePage";
+import NotFound from "./pages/common/NotFound";
+import PaymentPage from "./pages/common/PaymentPage";
+import ClientSignupPage from "./pages/auth/ClientSignupPage";
+import OnboardingPage from "./pages/common/OnboardingPage";
+import ClientLoginPage from "./pages/auth/ClientLoginPage";
+import ExpiredLinkPage from "./pages/auth/ExpiredLinkPage";
 
 // Auth provider
 import { AuthProvider } from "./context/AuthContext";
