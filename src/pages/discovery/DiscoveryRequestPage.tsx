@@ -38,7 +38,7 @@ const discoveryTypes: DiscoveryType[] = [
     title: "Form Interrogatories",
     description: "Standard set of questions approved for use in specific types of cases.",
     icon: FileText,
-    pdfUrl: "https://courts.ca.gov/sites/default/files/courts/default/2024-11/disc001.pdf"
+    pdfUrl: null
   },
   {
     id: "special-interrogatories",
@@ -283,7 +283,12 @@ const DiscoveryRequestPage = () => {
     
     try {
       // Generate selected documents using Gemini API
-      const generationPromises = selectedDocumentTypes.map(async (typeId) => {
+      // Skip 'form-interrogatories' as it's handled separately with PDF download
+      const documentTypesToGenerate = selectedDocumentTypes.filter(
+        typeId => typeId !== "form-interrogatories"
+      );
+      
+      const generationPromises = documentTypesToGenerate.map(async (typeId) => {
         const docType = discoveryTypes.find(d => d.id === typeId);
         if (!docType) return null;
         
@@ -322,10 +327,13 @@ const DiscoveryRequestPage = () => {
       console.error("Error generating documents:", error);
       
       // Fallback to just using the document titles
-      const fallbackDocs = selectedDocumentTypes.map(typeId => {
-        const docType = discoveryTypes.find(d => d.id === typeId);
-        return docType?.title || "";
-      }).filter(title => title !== "");
+      // Skip 'form-interrogatories' as it's handled separately with PDF download
+      const fallbackDocs = selectedDocumentTypes
+        .filter(typeId => typeId !== "form-interrogatories")
+        .map(typeId => {
+          const docType = discoveryTypes.find(d => d.id === typeId);
+          return docType?.title || "";
+        }).filter(title => title !== "");
       
       setGeneratedDocuments(fallbackDocs);
       setIsGenerating(false);
@@ -519,6 +527,7 @@ const DiscoveryRequestPage = () => {
             onReplaceComplaint={handleReplaceComplaint}
             onViewComplaint={handleViewComplaint}
             onEditExtractedData={() => setShowExtractedDataDialog(true)}
+            caseId={caseId}
           />
         )}
 

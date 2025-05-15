@@ -8,8 +8,9 @@ import {
   CardTitle 
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, Eye, ArrowRight } from "lucide-react";
+import { FileText, Eye, ArrowRight, ExternalLink } from "lucide-react";
 import { ComplaintInformation } from "@/integrations/gemini/client";
+import FormInterrogatoriesPdfButton from "./FormInterrogatoriesPdfButton";
 
 interface Document {
   id: string;
@@ -41,6 +42,7 @@ interface SelectDocumentsSectionProps {
   onReplaceComplaint: () => void;
   onViewComplaint: () => void;
   onEditExtractedData: () => void;
+  caseId?: string;
 }
 
 const SelectDocumentsSection = ({
@@ -52,8 +54,20 @@ const SelectDocumentsSection = ({
   onGenerateDocuments,
   onReplaceComplaint,
   onViewComplaint,
-  onEditExtractedData
+  onEditExtractedData,
+  caseId
 }: SelectDocumentsSectionProps) => {
+  // Find the form interrogatories document type
+  const formInterrogatoriesType = discoveryTypes.find(type => type.id === "form-interrogatories");
+  
+  // Filter out other document types (non-form-interrogatories)
+  const otherDocumentTypes = discoveryTypes.filter(type => type.id !== "form-interrogatories");
+  
+  // Check if any other document types are selected
+  const hasOtherSelectedTypes = selectedDocumentTypes.some(
+    typeId => typeId !== "form-interrogatories"
+  );
+
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">
@@ -127,16 +141,61 @@ const SelectDocumentsSection = ({
         </CardContent>
       </Card>
       
+      {/* Form Interrogatories Card */}
+      {formInterrogatoriesType && (
+        <Card className="mt-4 border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <formInterrogatoriesType.icon className="h-5 w-5 mr-2 text-primary" />
+              {formInterrogatoriesType.title}
+            </CardTitle>
+            <CardDescription>
+              {formInterrogatoriesType.description}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-sm">
+                Form Interrogatories (DISC-001) is an official Judicial Council form that will be 
+                downloaded directly from the California Courts website with your case information pre-filled.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                <FormInterrogatoriesPdfButton 
+                  extractedData={extractedData} 
+                  caseId={caseId}
+                />
+                
+                {formInterrogatoriesType.pdfUrl && (
+                  <Button variant="outline" size="sm" asChild>
+                    <a 
+                      href={formInterrogatoriesType.pdfUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center"
+                    >
+                      View Original Form
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Other Document Types Card */}
       <Card className="mt-4">
         <CardHeader>
-          <CardTitle>Discovery Document Types</CardTitle>
+          <CardTitle>Other Discovery Document Types</CardTitle>
           <CardDescription>
             Select the types of discovery documents you want to generate:
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {discoveryTypes.map(type => (
+            {otherDocumentTypes.map(type => (
               <div key={type.id} className="flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50">
                 <Checkbox 
                   id={type.id} 
@@ -163,7 +222,10 @@ const SelectDocumentsSection = ({
               Replace Complaint
             </Button>
           )}
-          <Button onClick={onGenerateDocuments} disabled={selectedDocumentTypes.length === 0}>
+          <Button 
+            onClick={onGenerateDocuments} 
+            disabled={!hasOtherSelectedTypes}
+          >
             Generate Selected Documents
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
