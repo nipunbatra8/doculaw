@@ -148,35 +148,35 @@ export const fillFormInterrogatories = async (
     // Common field mappings for DISC-001 form
     const fieldMappings: Record<string, string> = {
       // Attorney information
-      'attorney.name': 'Attorney for Plaintiff',
-      'attorney.firm': 'Legal Firm LLP',
-      'attorney.address.street': '123 Legal Street',
-      'attorney.address.city': 'Legal City',
-      'attorney.address.state': 'CA',
-      'attorney.address.zip': '90210',
-      'attorney.phone': '(555) 123-4567',
-      'attorney.fax': '(555) 765-4321',
-      'attorney.email': 'attorney@legalfirm.com',
-      'attorney.for': 'Plaintiff',
+      'attorney.name': caseInfo.attorney?.name || '',
+      'attorney.firm': caseInfo.attorney?.firm || '',
+      'attorney.address.street': caseInfo.attorney?.address?.street || '',
+      'attorney.address.city': caseInfo.attorney?.address?.city || '',
+      'attorney.address.state': caseInfo.attorney?.address?.state || '',
+      'attorney.address.zip': caseInfo.attorney?.address?.zip || '',
+      'attorney.phone': caseInfo.attorney?.phone || '',
+      'attorney.fax': caseInfo.attorney?.fax || '',
+      'attorney.email': caseInfo.attorney?.email || '',
+      'attorney.for': caseInfo.attorney?.attorneyFor || '',
       
       // Court information
-      'court.county': caseInfo.courtName?.split('County of ')[1] || 'Los Angeles',
-      'court.address': '123 Court Street',
-      'court.city': 'Court City',
-      'court.zip': '90210',
-      'court.branch': 'Central',
+      'court.county': caseInfo.court?.county || (caseInfo.courtName?.split('County of ')[1] || ''),
+      'court.address': '',
+      'court.city': '',
+      'court.zip': '',
+      'court.branch': '',
       
       // Case information
-      'case.number': caseInfo.caseNumber || '',
-      'case.title': `${caseInfo.plaintiff || 'Plaintiff'} v. ${caseInfo.defendant || 'Defendant'}`,
-      'case.plaintiff': caseInfo.plaintiff || 'Plaintiff',
-      'case.defendant': caseInfo.defendant || 'Defendant',
+      'case.number': caseInfo.case?.caseNumber || caseInfo.caseNumber || '',
+      'case.title': caseInfo.case?.shortTitle || `${caseInfo.plaintiff || ''} v. ${caseInfo.defendant || ''}`,
+      'case.plaintiff': caseInfo.plaintiff || '',
+      'case.defendant': caseInfo.defendant || '',
       
       // Form information
-      'form.requestingParty': caseInfo.plaintiff || 'Plaintiff',
-      'form.respondingParty': caseInfo.defendant || 'Defendant',
-      'form.setNumber': '1',
-      'form.date': `${new Date().getMonth() + 1}/${new Date().getDate()}/${new Date().getFullYear()}`
+      'form.requestingParty': caseInfo.formParties?.askingParty || caseInfo.plaintiff || '',
+      'form.respondingParty': caseInfo.formParties?.answeringParty || caseInfo.defendant || '',
+      'form.setNumber': caseInfo.formParties?.setNumber || '',
+      'form.date': caseInfo.date || `${new Date().getMonth() + 1}/${new Date().getDate()}/${new Date().getFullYear()}`
     };
     
     // Try to fill any text fields we can find
@@ -208,104 +208,103 @@ export const fillFormInterrogatories = async (
         if (!valueSet) {
           // Fill based on field name patterns
           if (fieldName.includes('Name') || fieldName.includes('AttyName')) {
-            textField.setText('Attorney for Plaintiff');
+            textField.setText(caseInfo.attorney?.name || '');
             successfulFields++;
           }
           else if (fieldName.includes('Firm') || fieldName.includes('AttyFirm')) {
-            textField.setText('Legal Firm LLP');
+            textField.setText(caseInfo.attorney?.firm || '');
             successfulFields++;
           }
           else if (fieldName.includes('Street')) {
-            textField.setText('123 Legal Street');
+            textField.setText(caseInfo.attorney?.address?.street || '');
             successfulFields++;
           }
           else if (fieldName.includes('City')) {
-            textField.setText('Legal City');
+            textField.setText(caseInfo.attorney?.address?.city || '');
             successfulFields++;
           }
           else if (fieldName.includes('State')) {
-            textField.setText('CA');
+            textField.setText(caseInfo.attorney?.address?.state || '');
             successfulFields++;
           }
           else if (fieldName.includes('Zip')) {
-            textField.setText('90210');
+            textField.setText(caseInfo.attorney?.address?.zip || '');
             successfulFields++;
           }
           else if (fieldName.includes('Phone')) {
-            textField.setText('(555) 123-4567');
+            textField.setText(caseInfo.attorney?.phone || '');
             successfulFields++;
           }
           else if (fieldName.includes('Fax')) {
-            textField.setText('(555) 765-4321');
+            textField.setText(caseInfo.attorney?.fax || '');
             successfulFields++;
           }
           else if (fieldName.includes('Email')) {
-            textField.setText('attorney@legalfirm.com');
+            textField.setText(caseInfo.attorney?.email || '');
             successfulFields++;
           }
           else if (fieldName.includes('AttyFor')) {
-            textField.setText('Plaintiff');
+            textField.setText(caseInfo.attorney?.attorneyFor || '');
             successfulFields++;
           }
           else if (fieldName.includes('County') || fieldName.includes('CrtCounty')) {
-            textField.setText(caseInfo.courtName?.split('County of ')[1] || 'Los Angeles');
+            textField.setText(caseInfo.court?.county || (caseInfo.courtName?.split('County of ')[1] || ''));
             successfulFields++;
           }
           else if (fieldName.includes('CaseNumber')) {
-            textField.setText(caseInfo.caseNumber || '');
+            textField.setText(caseInfo.case?.caseNumber || caseInfo.caseNumber || '');
             successfulFields++;
           }
           else if (fieldName.includes('Plaintiff') || fieldName.includes('PlaintiffCaption')) {
-            textField.setText(caseInfo.plaintiff || 'Plaintiff');
+            textField.setText(caseInfo.plaintiff || '');
             successfulFields++;
           }
           else if (fieldName.includes('Defendant') || fieldName.includes('DefendantCaption')) {
-            textField.setText(caseInfo.defendant || 'Defendant');
+            textField.setText(caseInfo.defendant || '');
             successfulFields++;
           }
           else if (fieldName.includes('ReqParty')) {
-            textField.setText(caseInfo.plaintiff || 'Plaintiff');
+            textField.setText(caseInfo.formParties?.askingParty || caseInfo.plaintiff || '');
             successfulFields++;
           }
           else if (fieldName.includes('ResParty')) {
-            textField.setText(caseInfo.defendant || 'Defendant');
+            textField.setText(caseInfo.formParties?.answeringParty || caseInfo.defendant || '');
             successfulFields++;
           }
           else if (fieldName.includes('Date')) {
-            textField.setText(`${new Date().getMonth() + 1}/${new Date().getDate()}/${new Date().getFullYear()}`);
+            textField.setText(caseInfo.date || `${new Date().getMonth() + 1}/${new Date().getDate()}/${new Date().getFullYear()}`);
             successfulFields++;
           }
           // Short Title of Case (TextField8)
           else if (fieldName.includes('TextField8')) {
-            textField.setText(`${caseInfo.plaintiff || 'Plaintiff'} v. ${caseInfo.defendant || 'Defendant'}`);
+            textField.setText(caseInfo.case?.shortTitle || `${caseInfo.plaintiff || ''} v. ${caseInfo.defendant || ''}`);
             successfulFields++;
           }
           // Asking Party (TextField5)
           else if (fieldName.includes('TextField5')) {
-            textField.setText(caseInfo.plaintiff || 'Plaintiff');
+            textField.setText(caseInfo.formParties?.askingParty || caseInfo.plaintiff || '');
             successfulFields++;
           }
           // Answering Party (TextField6)
           else if (fieldName.includes('TextField6')) {
-            textField.setText(caseInfo.defendant || 'Defendant');
+            textField.setText(caseInfo.formParties?.answeringParty || caseInfo.defendant || '');
             successfulFields++;
           }
           // Set No. of Pages (TextField7)
           else if (fieldName.includes('TextField7')) {
-            textField.setText('1');
+            textField.setText(caseInfo.formParties?.setNumber || '');
             successfulFields++;
           }
           // SUPERIOR COURT OF CALIFORNIA, COUNTY OF (TextField4)
           else if (fieldName.includes('TextField4')) {
-            textField.setText(caseInfo.courtName?.split('County of ')[1] || 'Los Angeles');
+            textField.setText(caseInfo.court?.county || (caseInfo.courtName?.split('County of ')[1] || ''));
             successfulFields++;
           }
           // INCIDENT means (insert your definition here (Text36) usually is blank
           else if (fieldName.includes('Text36')) {
-            textField.setText('');
+            textField.setText(caseInfo.incidentDefinition || '');
             successfulFields++;
           }
-          
         }
         
         console.log(`Successfully filled field: ${fieldName}`);
@@ -317,7 +316,7 @@ export const fillFormInterrogatories = async (
     
     console.log(`Successfully filled ${successfulFields} text fields.`);
     
-    // Check all checkboxes
+    // Check checkboxes based on relevantCheckboxes
     let checkedCount = 0;
     for (const field of fields) {
       const fieldName = field.getName();
@@ -327,10 +326,14 @@ export const fillFormInterrogatories = async (
             fieldName.includes('check') || 
             fieldName.includes('Check') || 
             fieldName.includes('.0')) {
-          const checkbox = form.getCheckBox(fieldName);
-          checkbox.check();
-          checkedCount++;
-          console.log(`Checked checkbox: ${fieldName}`);
+          
+          // Only check the checkbox if it's explicitly set to true in relevantCheckboxes
+          if (caseInfo.relevantCheckboxes && caseInfo.relevantCheckboxes[fieldName] === true) {
+            const checkbox = form.getCheckBox(fieldName);
+            checkbox.check();
+            checkedCount++;
+            console.log(`Checked checkbox: ${fieldName}`);
+          }
         }
       } catch (error) {
         console.warn(`Error checking checkbox: ${error instanceof Error ? error.message : 'Unknown error'}`);

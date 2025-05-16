@@ -2,8 +2,13 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FileText, Download, Loader2, AlertCircle } from 'lucide-react';
 import { fillFormInterrogatories, downloadPdf, inspectPdfFields, downloadPdfFromCourts } from '@/integrations/pdf/client';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { 
+  ComplaintInformation, 
+  analyzeFormInterrogatories, 
+  extractComplaintInformationFromFile 
+} from '@/integrations/gemini/client';
 import { useToast } from '@/hooks/use-toast';
+import { useCaseDocuments } from '@/hooks/use-case-documents';
 
 interface FormInterrogatoriesPdfButtonProps {
   extractedData: ComplaintInformation | null;
@@ -18,9 +23,10 @@ const FormInterrogatoriesPdfButton = ({
   const [isInspecting, setIsInspecting] = useState(false);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const { toast } = useToast();
+  const { getComplaintFileAsBase64 } = useCaseDocuments();
 
   const handleDownloadPdf = async () => {
-    if (!extractedData) {
+    if (!extractedData && !caseId) {
       toast({
         title: 'Missing Data',
         description: 'No case information available to fill the form.',
@@ -34,12 +40,80 @@ const FormInterrogatoriesPdfButton = ({
 
     try {
       toast({
-        title: 'Downloading PDF',
-        description: 'Preparing the form interrogatories PDF...',
+        title: 'Analyzing Complaint Document',
+        description: 'Processing the complaint document to extract detailed information...',
+      });
+
+      // Start with the original extracted data
+      let enhancedData = extractedData || null;
+
+      // Try to get the full complaint file for direct analysis
+      if (caseId) {
+        try {
+          // Get the complaint file as base64
+          const { base64, fileType, fileName } = await getComplaintFileAsBase64(caseId);
+          console.log(`Retrieved complaint file: ${fileName}, type: ${fileType}`);
+          
+          // Use Gemini to analyze the entire file
+          const fileAnalysisData = await extractComplaintInformationFromFile(base64, fileType);
+          console.log('Gemini direct file analysis results:', fileAnalysisData);
+          
+          // Use the file analysis data as our primary source of information
+          enhancedData = fileAnalysisData;
+          
+          toast({
+            title: 'Document Analysis Complete',
+            description: 'Successfully extracted information from the complaint document.',
+          });
+        } catch (fileAnalysisError) {
+          console.error('Error analyzing complaint file:', fileAnalysisError);
+          toast({
+            title: 'Document Analysis Limited',
+            description: 'Could not fully analyze the document. Using available information.',
+            variant: 'default',
+          });
+          // Continue with whatever data we have
+        }
+      }
+      
+      if (!enhancedData) {
+        toast({
+          title: 'Missing Information',
+          description: 'No information available to fill the form.',
+          variant: 'destructive',
+        });
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Checkbox analysis
+      try {
+        if (caseId) {
+          toast({
+            title: 'Analyzing Case Type',
+            description: 'Determining relevant form sections for this case...',
+          });
+          
+          // Additional analysis to determine which checkboxes should be checked
+          enhancedData = await analyzeFormInterrogatories(
+            JSON.stringify(enhancedData), // Send the structured data for analysis
+            enhancedData
+          );
+          
+          console.log('Enhanced form data with checkbox analysis:', enhancedData);
+        }
+      } catch (analysisError) {
+        console.warn('Error analyzing form with Gemini:', analysisError);
+        // Continue with original data if analysis fails
+      }
+      
+      toast({
+        title: 'Preparing PDF',
+        description: 'Filling out the form interrogatories PDF with case information...',
       });
       
-      // Generate the filled PDF
-      const pdfBytes = await fillFormInterrogatories(extractedData);
+      // Generate the filled PDF with enhanced data
+      const pdfBytes = await fillFormInterrogatories(enhancedData);
       
       // Create a filename based on the case
       const filename = `Form_Interrogatories_${caseId || 'case'}.pdf`;
@@ -49,7 +123,7 @@ const FormInterrogatoriesPdfButton = ({
       
       toast({
         title: 'PDF Downloaded',
-        description: 'Form Interrogatories PDF has been downloaded.',
+        description: 'Form Interrogatories PDF has been downloaded with your case information.',
       });
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -137,7 +211,7 @@ const FormInterrogatoriesPdfButton = ({
       <div className="flex flex-col sm:flex-row gap-2">
         <Button 
           onClick={handleDownloadPdf}
-          disabled={isProcessing || isInspecting || !extractedData}
+          disabled={isProcessing || isInspecting || (!extractedData && !caseId)}
           variant="default"
           className="flex items-center gap-2"
         >
