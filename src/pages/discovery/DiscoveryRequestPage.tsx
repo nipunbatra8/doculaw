@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { ChevronLeft, FileText, MessageSquare, HelpCircle, LinkIcon } from "lucide-react";
 
 // API Integration
-import { extractComplaintInformation, generateDiscoveryDocument, ComplaintInformation } from "@/integrations/gemini/client";
+import { extractComplaintInformation, ComplaintInformation } from "@/integrations/gemini/client";
 
 // Discovery Components
 import CaseInformationCard from "@/components/discovery/CaseInformationCard";
@@ -291,16 +291,6 @@ const DiscoveryRequestPage = () => {
       const generationPromises = documentTypesToGenerate.map(async (typeId) => {
         const docType = discoveryTypes.find(d => d.id === typeId);
         if (!docType) return null;
-        
-        // Call Gemini API to generate document content
-        const docContent = await generateDiscoveryDocument(docType.title, extractedData);
-        
-        // Return both the document title and its content
-        return {
-          title: docType.title,
-          content: docContent,
-          id: typeId
-        };
       });
       
       // Wait for all documents to be generated

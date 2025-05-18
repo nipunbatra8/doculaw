@@ -74,6 +74,9 @@ export interface ComplaintInformation {
   relevantCheckboxes?: {
     [key: string]: boolean;
   };
+  
+  // Explanation from Gemini analysis
+  explanation?: string;
 }
 
 /**
@@ -457,135 +460,217 @@ export async function extractComplaintInformation(docText: string): Promise<Comp
 }
 
 /**
- * Analyzes the complaint document to determine which Form Interrogatories checkboxes should be checked
- * @param docText The text content of the complaint document
- * @returns Enhanced complaint information with checkbox selections
+ * Analyzes a complaint document and determines which checkboxes should be checked in the Form Interrogatories
+ * @param extractedInfo Initial complaint information
+ * @param docText The text content of the document (optional, will use only extractedInfo if not provided)
+ * @returns Enhanced complaint information with relevantCheckboxes field
  */
-export async function analyzeFormInterrogatories(docText: string, baseInfo: ComplaintInformation): Promise<ComplaintInformation> {
+export async function analyzeCheckboxesForFormInterrogatories(
+  extractedInfo: ComplaintInformation,
+  docText?: string
+): Promise<ComplaintInformation> {
   try {
+    console.log("Analyzing document for form interrogatory checkboxes...");
+    
+    // Use the Pro model for complex analysis
     const model = genAI.getGenerativeModel({ 
       model: "gemini-1.5-pro",
       safetySettings,
     });
     
+    // Define the list of form interrogatory section numbers for reference
+    const sections = {
+      general: "301-309",
+      personalInjury: "310-318",
+      motorVehicles: "320-323",
+      pedestrianBicycle: "330-332",
+      premisesLiability: "340-340.7",
+      businessContract: "350-355",
+      employmentDiscrimination: "360-360.7",
+      employmentWageHour: "370-376"
+    };
+    
+    // Form interrogatory checkbox field information
+    const checkboxFields = [
+      {
+        "field_name": "Definitions",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"(2) INCIDENT means (insert your definition here or on a separate, attached sheet labeled \\\"Section 4(a)(2)\\\"):\". Check this box if this type of information is relevant to the case."
+      },
+      {
+        "field_name": "GenBkgrd",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"2.1 State:\". Check this box if this type of information is relevant to the case."
+      },
+      {
+        "field_name": "PMEInjuries",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"6.1 Do you attribute any physical, mental, or emotional injuries to the INCIDENT? (If your answer is \\\"no,\\\" do not answer interrogatories 6.2 through 6.7).\". Check this box if this type of information is relevant to the case."
+      },
+      {
+        "field_name": "PropDam",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"7.1 Do you attribute any loss of or damage to a vehicle or other property to the INCIDENT? If so, for each item of property:\". Check this box if this type of information is relevant to the case."
+      },
+      {
+        "field_name": "LostincomeEarn",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"8.1 Do you attribute any loss of income or earning capacity to the INCIDENT? (If your answer is \\\"no,\\\" do not answer interrogatories 8.2 through 8.8).\". Check this box if this type of information is relevant to the case."
+      },
+      {
+        "field_name": "OtherDam",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"9.1 Are there any other damages that you attribute to the INCIDENT? If so, for each item of damage state:\". Check this box if this type of information is relevant to the case."
+      },
+      {
+        "field_name": "MedHist",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"10.1 At any time before the INCIDENT did you have complaints or injuries that involved the same part of your body claimed to have been injured in the INCIDENT? If so, for each state:\". Check this box if this type of information is relevant to the case."
+      },
+      {
+        "field_name": "IncOccrdMV",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"20.1 State the date, time, and place of the INCIDENT (closest street ADDRESS or intersection).\". Check this box for motor vehicle incidents."
+      },
+      {
+        "field_name": "IncOccrdMV2",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"20.2 For each vehicle involved in the INCIDENT, state:\". Check this box for motor vehicle incidents."
+      },
+      {
+        "field_name": "Contract",
+        "description_for_gemini": "This checkbox corresponds to the interrogatory: \"50.1 For each agreement alleged in the pleadings:\". Check this box for contract disputes."
+      }
+    ];
+    
+    // Create a prompt that explains what we need
     const prompt = `
-    You are an AI legal assistant helping to analyze a complaint document to determine which Form Interrogatories 
-    (DISC-001) sections are relevant to this case.
+    You are a legal assistant analyzing a complaint document to determine which Form Interrogatory checkboxes should be selected.
     
-    First, analyze the complaint document to understand the nature of the case and determine the case type 
-    (e.g., personal injury, property damage, contract dispute, employment, etc.).
+    Form Interrogatories (DISC-001) are organized into sections based on case type:
+    1. General (${sections.general}): Always applicable to all cases
+    2. Personal Injury (${sections.personalInjury}): For cases involving personal injury claims
+    3. Motor Vehicles (${sections.motorVehicles}): For cases involving motor vehicle accidents
+    4. Pedestrian and Bicycle (${sections.pedestrianBicycle}): For cases involving pedestrian or bicycle incidents
+    5. Premises Liability (${sections.premisesLiability}): For cases involving injuries on property
+    6. Business/Contract (${sections.businessContract}): For business disputes and contract cases
+    7. Employment - Discrimination (${sections.employmentDiscrimination}): For employment discrimination cases
+    8. Employment - Wage/Hour (${sections.employmentWageHour}): For wage and hour violations
     
-    Then, identify which of the following Form Interrogatories sections would be relevant to this case and 
-    should be checked in the form:
-
-    1. 301-309: All cases
-    2. 310.0-318.7: Personal Injury
-    3. 320.0-323.7: Motor Vehicles
-    4. 330.0-332.4: Pedestrian and Bicycle
-    5. 340.0-340.7: Premises Liability
-    6. 350.0-355.6: Business and Contract
-    7. 360.0-360.7: Employment - Discrimination or Harassment
-    8. 370.0-376.3: Employment - Wage and Hour
-
-    Based on the complaint text, determine which sections should be checked.
-    Also determine if the definition of "INCIDENT" should be modified from its default meaning.
-
-    Format your response as a JSON object with these keys:
+    I need you to analyze the following information and determine which form sections should be checked.
+    
+    Basic case information already extracted:
+    - Defendant: ${extractedInfo.defendant}
+    - Plaintiff: ${extractedInfo.plaintiff}
+    - Case Number: ${extractedInfo.caseNumber}
+    - Filing Date: ${extractedInfo.filingDate}
+    - Charge/Claim: ${extractedInfo.chargeDescription || "Not specified"}
+    - Court: ${extractedInfo.courtName || "Not specified"}
+    
+    ${docText ? "Full document text to analyze:" : "No full document text provided, analyze based on the metadata above."}
+    ${docText ? docText.substring(0, 5000) + (docText.length > 5000 ? "... [text truncated due to length]" : "") : ""}
+    
+    For the following specific form fields, determine if they should be checked based on the case:
+    ${checkboxFields.map(field => `- ${field.field_name}: ${field.description_for_gemini}`).join('\n')}
+    
+    Format your response as a JSON object with this structure:
     {
-      "caseType": "string describing the primary case type",
+      "caseType": "Primary type of case (e.g., personal injury, contract dispute, employment)",
+      "incidentDefinition": "A brief definition of 'INCIDENT' as it should be used in the form (e.g., 'the automobile accident of January 1, 2023')",
       "relevantCheckboxes": {
         "section301": true,
-        "section310": true/false,
-        "section320": true/false,
-        "section330": true/false,
-        "section340": true/false,
-        "section350": true/false,
-        "section360": true/false,
-        "section370": true/false
+        "section310": false,
+        "section320": false,
+        "section330": false,
+        "section340": false,
+        "section350": false,
+        "section360": false,
+        "section370": false,
+        "Definitions": true,
+        "GenBkgrd": true,
+        "PMEInjuries": false,
+        "PropDam": false,
+        "LostincomeEarn": false,
+        "OtherDam": false,
+        "MedHist": false,
+        "IncOccrdMV": false,
+        "IncOccrdMV2": false,
+        "Contract": false
       },
-      "incidentDefinition": "string containing a custom definition of 'INCIDENT' if needed, or null if default is fine"
+      "explanation": "Brief explanation of why these sections were selected"
     }
     
-    Return only the JSON object with no other text.
-    
-    Complaint document:
-    ${docText}
+    Always set section301 to true as these are general interrogatories that apply to all cases.
+    For other sections, set to true only if they clearly apply to this specific case.
     `;
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
     
-    console.log("Gemini Form Interrogatories analysis:", text);
+    // Log the full response from Gemini for debugging
+    console.log("===== GEMINI CHECKBOX ANALYSIS RESPONSE =====");
+    console.log(text);
+    console.log("============================================");
     
-    // Process the response
+    // Try to parse the JSON response
     try {
-      const analysis = JSON.parse(text);
+      const checkboxAnalysis = JSON.parse(text);
       
-      // Merge the analysis with the base information
-      const enhancedInfo: ComplaintInformation = {
-        ...baseInfo,
-        caseType: analysis.caseType,
-        relevantCheckboxes: analysis.relevantCheckboxes,
-        incidentDefinition: analysis.incidentDefinition && analysis.incidentDefinition !== "null" 
-          ? analysis.incidentDefinition 
-          : undefined
+      // Log the structured data
+      console.log("Parsed analysis result:", JSON.stringify(checkboxAnalysis, null, 2));
+      
+      // Create a new object that merges the original extracted info with the checkbox analysis
+      return {
+        ...extractedInfo,
+        caseType: checkboxAnalysis.caseType || extractedInfo.caseType,
+        incidentDefinition: checkboxAnalysis.incidentDefinition || extractedInfo.incidentDefinition,
+        relevantCheckboxes: {
+          ...(extractedInfo.relevantCheckboxes || {}),
+          ...(checkboxAnalysis.relevantCheckboxes || {})
+        },
+        explanation: checkboxAnalysis.explanation || extractedInfo.explanation
       };
-      
-      return enhancedInfo;
     } catch (parseError) {
-      console.error("Error parsing Form Interrogatories analysis:", parseError);
-      return baseInfo; // Return original info if parsing fails
+      console.error("Error parsing Gemini checkbox analysis response:", parseError);
+      
+      // Try to extract JSON from the response text if it's not valid JSON
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const checkboxAnalysis = JSON.parse(jsonMatch[0]);
+          
+          // Log the structured data from extracted JSON
+          console.log("Parsed analysis from extracted JSON:", JSON.stringify(checkboxAnalysis, null, 2));
+          
+          // Create a new object that merges the original extracted info with the checkbox analysis
+          return {
+            ...extractedInfo,
+            caseType: checkboxAnalysis.caseType || extractedInfo.caseType,
+            incidentDefinition: checkboxAnalysis.incidentDefinition || extractedInfo.incidentDefinition,
+            relevantCheckboxes: {
+              ...(extractedInfo.relevantCheckboxes || {}),
+              ...(checkboxAnalysis.relevantCheckboxes || {})
+            },
+            explanation: checkboxAnalysis.explanation || extractedInfo.explanation
+          };
+        }
+      } catch (secondParseError) {
+        console.error("Second attempt at parsing JSON failed:", secondParseError);
+      }
+      
+      // If all parsing fails, just return the original data with default checkboxes
+      return {
+        ...extractedInfo,
+        relevantCheckboxes: {
+          ...(extractedInfo.relevantCheckboxes || {}),
+          section301: true // Always check the general section as fallback
+        },
+        explanation: "No valid analysis found"
+      };
     }
   } catch (error) {
-    console.error("Error analyzing form interrogatories relevance:", error);
-    return baseInfo; // Return original info if API call fails
+    console.error("Error analyzing checkboxes with Gemini:", error);
+    
+    // In case of any error, return the original data with just the general section checked
+    return {
+      ...extractedInfo,
+      relevantCheckboxes: {
+        ...(extractedInfo.relevantCheckboxes || {}),
+        section301: true // Always check the general section as fallback
+      },
+      explanation: "No valid analysis found"
+    };
   }
 }
-
-/**
- * Generate discovery document content based on complaint information
- * @param documentType The type of discovery document to generate
- * @param complaintInfo The extracted information from the complaint
- * @returns Generated document content
- */
-export async function generateDiscoveryDocument(documentType: string, complaintInfo: ComplaintInformation) {
-  try {
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro",
-      safetySettings,
-    });
-    
-    const prompt = `
-    You are a legal document generation assistant. Based on the information about a criminal complaint,
-    generate a ${documentType} discovery document.
-    
-    Complaint information:
-    - Defendant: ${complaintInfo.defendant}
-    - Plaintiff: ${complaintInfo.plaintiff}
-    - Case Number: ${complaintInfo.caseNumber}
-    - Filing Date: ${complaintInfo.filingDate}
-    - Court: ${complaintInfo.courtName}
-    - Charges: ${complaintInfo.chargeDescription}
-    
-    Create appropriate content for a ${documentType} document based on this information.
-    Format your response as a single string containing the document text.
-    `;
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
-  } catch (error) {
-    console.error(`Error generating ${documentType} document:`, error);
-    
-    // Return placeholder content if API call fails
-    return `# ${documentType}\n\nThis is a placeholder for the ${documentType} document.\nIt would include relevant questions and requests based on the complaint information.`;
-  }
-}
-
-export default {
-  extractComplaintInformation,
-  extractComplaintInformationFromFile,
-  analyzeFormInterrogatories,
-  generateDiscoveryDocument
-}; 

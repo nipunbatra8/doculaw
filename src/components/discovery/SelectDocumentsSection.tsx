@@ -164,6 +164,7 @@ const SelectDocumentsSection = ({
                 <FormInterrogatoriesPdfButton 
                   extractedData={extractedData} 
                   caseId={caseId}
+                  onEditExtractedData={onEditExtractedData}
                 />
                 
                 {formInterrogatoriesType.pdfUrl && (

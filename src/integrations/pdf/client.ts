@@ -105,10 +105,12 @@ export const downloadPdfFromCourts = async (): Promise<ArrayBuffer> => {
 /**
  * Fills out a Form Interrogatories PDF (DISC-001) with case information
  * @param caseInfo Information extracted from the complaint
+ * @param isPreview Whether this is for preview mode (includes checking box 50.1 and removing buttons/disclaimer)
  * @returns An ArrayBuffer containing the filled PDF
  */
 export const fillFormInterrogatories = async (
-  caseInfo: ComplaintInformation
+  caseInfo: ComplaintInformation,
+  isPreview: boolean = false
 ): Promise<ArrayBuffer> => {
   try {
     console.log('Starting to fill form interrogatories PDF...');
@@ -305,6 +307,20 @@ export const fillFormInterrogatories = async (
             textField.setText(caseInfo.incidentDefinition || '');
             successfulFields++;
           }
+          
+          // If isPreview is true, remove buttons and disclaimer at the bottom
+          if (isPreview) {
+            // Clear any button text fields or disclaimer text
+            if (fieldName.includes('Button') || 
+                fieldName.includes('Submit') || 
+                fieldName.includes('Reset') ||
+                fieldName.includes('Print') ||
+                fieldName.includes('Disclaimer') ||
+                fieldName.includes('Footer')) {
+              textField.setText('');
+              successfulFields++;
+            }
+          }
         }
         
         console.log(`Successfully filled field: ${fieldName}`);
@@ -315,6 +331,32 @@ export const fillFormInterrogatories = async (
     }
     
     console.log(`Successfully filled ${successfulFields} text fields.`);
+    
+    // Directly map section names to specific checkbox field patterns in the PDF
+    // This helps in case the field names don't exactly match the pattern we expect
+    const checkboxMappings: Record<string, string[]> = {
+      // Common patterns for section checkboxes
+      'section301': ['CheckBox301', '301.0', 'Check301'],
+      'section310': ['CheckBox310', '310.0', 'Check310'],
+      'section320': ['CheckBox320', '320.0', 'Check320'],
+      'section330': ['CheckBox330', '330.0', 'Check330'],
+      'section340': ['CheckBox340', '340.0', 'Check340'],
+      'section350': ['CheckBox350', '350.0', 'Check350'],
+      'section360': ['CheckBox360', '360.0', 'Check360'],
+      'section370': ['CheckBox370', '370.0', 'Check370'],
+      
+      // Specific field mappings for Gemini analysis
+      'Definitions': ['Definitions', 'Definition', 'Section4', 'Text36'],
+      'GenBkgrd': ['GenBkgrd', 'GenBkgrd1', 'GenBkgrd[0]'],
+      'PMEInjuries': ['PMEInjuries', 'PMEInjuries1', 'PMEInjuries[0]'],
+      'PropDam': ['PropDam', 'PropDam1', 'PropDam[0]'],
+      'LostincomeEarn': ['LostincomeEarn', 'LostincomeEarn1', 'LostincomeEarn[0]'],
+      'OtherDam': ['OtherDam', 'OtherDam1', 'OtherDam[0]'],
+      'MedHist': ['MedHist', 'MedHist1', 'MedHist[0]'],
+      'IncOccrdMV': ['IncOccrdMV', 'IncOccrdMV1', 'IncOccrdMV[0]'],
+      'IncOccrdMV2': ['IncOccrdMV2', 'IncOccrdMV2[0]'],
+      'Contract': ['Contract', 'Contract1', 'Contract[0]'],
+    };
     
     // Check checkboxes based on relevantCheckboxes
     let checkedCount = 0;
@@ -327,8 +369,107 @@ export const fillFormInterrogatories = async (
             fieldName.includes('Check') || 
             fieldName.includes('.0')) {
           
-          // Only check the checkbox if it's explicitly set to true in relevantCheckboxes
+          // First try direct mapping if the field name is exactly in relevantCheckboxes
           if (caseInfo.relevantCheckboxes && caseInfo.relevantCheckboxes[fieldName] === true) {
+            const checkbox = form.getCheckBox(fieldName);
+            checkbox.check();
+            checkedCount++;
+            console.log(`Checked checkbox: ${fieldName}`);
+            continue;
+          }
+          
+          // Next, try to map section flags to actual checkbox fields
+          let shouldCheck = false;
+          
+          // First check if this checkbox matches any of our direct mappings
+          if (caseInfo.relevantCheckboxes) {
+            for (const [sectionKey, fieldPatterns] of Object.entries(checkboxMappings)) {
+              if (caseInfo.relevantCheckboxes[sectionKey] === true) {
+                for (const pattern of fieldPatterns) {
+                  if (fieldName.includes(pattern)) {
+                    shouldCheck = true;
+                    break;
+                  }
+                }
+                if (shouldCheck) break;
+              }
+            }
+          }
+          
+          // If no direct mapping matched, try the detailed section-by-section mapping
+          if (!shouldCheck && caseInfo.relevantCheckboxes) {
+            // Map section301-370 flags to actual checkbox field names
+            if (caseInfo.relevantCheckboxes.section301 && 
+                (fieldName.includes('301') || fieldName.includes('302') || 
+                 fieldName.includes('303') || fieldName.includes('304') || 
+                 fieldName.includes('305') || fieldName.includes('306') || 
+                 fieldName.includes('307') || fieldName.includes('308') || 
+                 fieldName.includes('309'))) {
+              shouldCheck = true;
+            }
+            
+            if (caseInfo.relevantCheckboxes.section310 && 
+                (fieldName.includes('310') || fieldName.includes('311') || 
+                 fieldName.includes('312') || fieldName.includes('313') || 
+                 fieldName.includes('314') || fieldName.includes('315') || 
+                 fieldName.includes('316') || fieldName.includes('317') || 
+                 fieldName.includes('318'))) {
+              shouldCheck = true;
+            }
+            
+            if (caseInfo.relevantCheckboxes.section320 && 
+                (fieldName.includes('320') || fieldName.includes('321') || 
+                 fieldName.includes('322') || fieldName.includes('323'))) {
+              shouldCheck = true;
+            }
+            
+            if (caseInfo.relevantCheckboxes.section330 && 
+                (fieldName.includes('330') || fieldName.includes('331') || 
+                 fieldName.includes('332'))) {
+              shouldCheck = true;
+            }
+            
+            if (caseInfo.relevantCheckboxes.section340 && 
+                (fieldName.includes('340'))) {
+              shouldCheck = true;
+            }
+            
+            if (caseInfo.relevantCheckboxes.section350 && 
+                (fieldName.includes('350') || fieldName.includes('351') || 
+                 fieldName.includes('352') || fieldName.includes('353') || 
+                 fieldName.includes('354') || fieldName.includes('355'))) {
+              shouldCheck = true;
+            }
+            
+            if (caseInfo.relevantCheckboxes.section360 && 
+                (fieldName.includes('360'))) {
+              shouldCheck = true;
+            }
+            
+            if (caseInfo.relevantCheckboxes.section370 && 
+                (fieldName.includes('370') || fieldName.includes('371') || 
+                 fieldName.includes('372') || fieldName.includes('373') || 
+                 fieldName.includes('374') || fieldName.includes('375') || 
+                 fieldName.includes('376'))) {
+              shouldCheck = true;
+            }
+            
+            // Some forms might have a main checkbox for each section
+            // For example section301 might be represented as a "301.0" checkbox
+            if (fieldName.endsWith('.0')) {
+              const sectionNumber = fieldName.split('.')[0];
+              if (sectionNumber === '301' && caseInfo.relevantCheckboxes.section301) shouldCheck = true;
+              if (sectionNumber === '310' && caseInfo.relevantCheckboxes.section310) shouldCheck = true;
+              if (sectionNumber === '320' && caseInfo.relevantCheckboxes.section320) shouldCheck = true;
+              if (sectionNumber === '330' && caseInfo.relevantCheckboxes.section330) shouldCheck = true;
+              if (sectionNumber === '340' && caseInfo.relevantCheckboxes.section340) shouldCheck = true;
+              if (sectionNumber === '350' && caseInfo.relevantCheckboxes.section350) shouldCheck = true;
+              if (sectionNumber === '360' && caseInfo.relevantCheckboxes.section360) shouldCheck = true;
+              if (sectionNumber === '370' && caseInfo.relevantCheckboxes.section370) shouldCheck = true;
+            }
+          }
+          
+          if (shouldCheck) {
             const checkbox = form.getCheckBox(fieldName);
             checkbox.check();
             checkedCount++;
