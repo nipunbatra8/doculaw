@@ -465,9 +465,6 @@ const DiscoveryRequestPage = () => {
         </div>
 
         <Separator />
-        
-        {/* Case Information Card */}
-        <CaseInformationCard caseData={caseData} />
 
         {/* Uploaded Complaint Section - Show when a complaint exists */}
         {complaintDocument && currentStep !== STEPS.GENERATING_DOCUMENTS && currentStep !== STEPS.VIEW_DOCUMENTS && (
