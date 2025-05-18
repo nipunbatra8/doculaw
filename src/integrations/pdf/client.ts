@@ -490,6 +490,27 @@ export const fillFormInterrogatories = async (
       return pdfBytes;
     }
     
+    // Crop the bottom of the last page to remove unwanted elements
+    try {
+      const pageCount = pdfDoc.getPageCount();
+      if (pageCount > 0) {
+        const lastPage = pdfDoc.getPage(pageCount - 1);
+        const { width, height } = lastPage.getSize();
+        
+        // Crop 5% off the bottom of the last page
+        const cropAmount = height * 0.04;
+        const cropHeight = height - cropAmount;
+        
+        console.log(`Cropping last page: removing 4% (${cropAmount.toFixed(2)} units) from bottom. New height: ${cropHeight.toFixed(2)}`);
+        
+        // Set the crop box for the last page
+        lastPage.setCropBox(0, cropAmount, width, cropHeight);
+      }
+    } catch (cropError) {
+      console.warn('Error cropping last page:', cropError);
+      // Continue without cropping
+    }
+    
     // Serialize the PDF document
     console.log('Saving PDF document...');
     const filledPdfBytes = await pdfDoc.save();
