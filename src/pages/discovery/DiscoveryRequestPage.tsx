@@ -535,7 +535,7 @@ const DiscoveryRequestPage = () => {
         <HelpSection />
 
         {/* RFA PDF Quick Preview Section */}
-        {extractedData && (
+        {/* {extractedData && (
           <Card className="mt-6">
             <CardHeader>
               <CardTitle className="text-lg">
@@ -553,7 +553,7 @@ const DiscoveryRequestPage = () => {
               />
             </CardContent>
           </Card>
-        )}
+        )} */}
       </div>
       
       {/* Dialog to confirm extracted data */}
