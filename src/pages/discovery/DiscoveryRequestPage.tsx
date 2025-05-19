@@ -11,6 +11,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ChevronLeft, FileText, MessageSquare, HelpCircle, LinkIcon } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 
 // API Integration
 import { extractComplaintInformation, ComplaintInformation } from "@/integrations/gemini/client";
@@ -27,6 +28,7 @@ import LoadingState from "@/components/discovery/LoadingState";
 import ExtractedDataDialog from "@/components/discovery/ExtractedDataDialog";
 import DocumentViewerDialog from "@/components/discovery/DocumentViewerDialog";
 import DocumentViewer from "@/components/discovery/DocumentViewer";
+import RFAPdfPreviewButton from "@/components/discovery/RFAPdfPreviewButton";
 
 // Types
 import { CaseData, Document, DiscoveryType, STEPS } from "@/components/discovery/types";
@@ -59,7 +61,7 @@ const discoveryTypes: DiscoveryType[] = [
     title: "Request for Admissions",
     description: "Ask opposing party to admit or deny specific facts.",
     icon: HelpCircle,
-    pdfUrl: null
+    pdfUrl: "/RFA.pdf"
   }
 ];
 
@@ -531,6 +533,27 @@ const DiscoveryRequestPage = () => {
 
         {/* Help section */}
         <HelpSection />
+
+        {/* RFA PDF Quick Preview Section */}
+        {extractedData && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="text-lg">
+                <FileText className="h-5 w-5 inline-block mr-2 text-primary" />
+                Quick Request for Admissions Preview
+              </CardTitle>
+              <CardDescription>
+                Quickly preview and download a Request for Admissions based on your case information.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RFAPdfPreviewButton
+                extractedData={extractedData}
+                caseId={caseId}
+              />
+            </CardContent>
+          </Card>
+        )}
       </div>
       
       {/* Dialog to confirm extracted data */}
