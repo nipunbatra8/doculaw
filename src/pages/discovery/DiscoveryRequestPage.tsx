@@ -524,10 +524,11 @@ const DiscoveryRequestPage = () => {
         {currentStep === STEPS.UPLOAD_COMPLAINT && !replacingComplaint && !isExtracting && !uploadedFileUrl && (
           <InitialScreen 
             complaintDocument={complaintDocument}
-            onSkipToSelection={handleSkipToSelection}
+            complaintInformation={extractedData}
+            caseDetails={caseData ?? null}
             onViewComplaint={handleViewComplaint}
             onReplaceComplaint={handleReplaceComplaint}
-            onStartUpload={() => setCurrentStep(STEPS.UPLOAD_COMPLAINT)}
+            onUploadNew={() => setReplacingComplaint(true)}
           />
         )}
 
