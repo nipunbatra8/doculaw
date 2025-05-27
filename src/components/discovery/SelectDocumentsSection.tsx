@@ -13,6 +13,8 @@ import { ComplaintInformation } from "@/integrations/gemini/client";
 import FormInterrogatoriesPdfButton from "./FormInterrogatoriesPdfButton";
 import RequestForAdmissionsPdfButton from "./RequestForAdmissionsPdfButton";
 import RFAPdfPreviewButton from "./RFAPdfPreviewButton";
+import SpecialInterrogatoriesPdfButton from "./SpecialInterrogatoriesPdfButton";
+import RequestForProductionPdfButton from "./RequestForProductionPdfButton";
 
 interface Document {
   id: string;
@@ -65,14 +67,27 @@ const SelectDocumentsSection = ({
   // Find the request for admissions document type
   const requestForAdmissionsType = discoveryTypes.find(type => type.id === "request-for-admissions");
   
+  // Find the special interrogatories document type
+  const specialInterrogatoriesType = discoveryTypes.find(type => type.id === "special-interrogatories");
+  
+  // Find the request for production document type
+  const requestForProductionType = discoveryTypes.find(type => type.id === "request-for-production");
+  
   // Filter out document types with dedicated buttons
   const otherDocumentTypes = discoveryTypes.filter(type => 
-    type.id !== "form-interrogatories" && type.id !== "request-for-admissions"
+    type.id !== "form-interrogatories" && 
+    type.id !== "request-for-admissions" && 
+    type.id !== "special-interrogatories" &&
+    type.id !== "request-for-production"
   );
   
   // Check if any other document types are selected
   const hasOtherSelectedTypes = selectedDocumentTypes.some(
-    typeId => typeId !== "form-interrogatories" && typeId !== "request-for-admissions"
+    typeId => 
+      typeId !== "form-interrogatories" && 
+      typeId !== "request-for-admissions" && 
+      typeId !== "special-interrogatories" &&
+      typeId !== "request-for-production"
   );
 
   return (
@@ -170,6 +185,98 @@ const SelectDocumentsSection = ({
                   <Button variant="outline" size="sm" asChild>
                     <a 
                       href={requestForAdmissionsType.pdfUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center"
+                    >
+                      View Original Form
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Special Interrogatories Card */}
+      {specialInterrogatoriesType && (
+        <Card className="mt-4 border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <specialInterrogatoriesType.icon className="h-5 w-5 mr-2 text-primary" />
+              {specialInterrogatoriesType.title}
+            </CardTitle>
+            <CardDescription>
+              {specialInterrogatoriesType.description}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-sm">
+                Special Interrogatories are custom questions tailored specifically to your case 
+                that the other party must answer under oath.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1">
+                  <SpecialInterrogatoriesPdfButton 
+                    extractedData={extractedData} 
+                    caseId={caseId}
+                  />
+                </div>
+                
+                {specialInterrogatoriesType.pdfUrl && (
+                  <Button variant="outline" size="sm" asChild>
+                    <a 
+                      href={specialInterrogatoriesType.pdfUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center"
+                    >
+                      View Original Form
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Request for Production Card */}
+      {requestForProductionType && (
+        <Card className="mt-4 border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <requestForProductionType.icon className="h-5 w-5 mr-2 text-primary" />
+              {requestForProductionType.title}
+            </CardTitle>
+            <CardDescription>
+              {requestForProductionType.description}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-sm">
+                Request for Production of Documents is a formal request for the opposing party to produce 
+                specific documents, electronically stored information, or tangible items relevant to your case.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1">
+                  <RequestForProductionPdfButton 
+                    extractedData={extractedData} 
+                    caseId={caseId}
+                  />
+                </div>
+                
+                {requestForProductionType.pdfUrl && (
+                  <Button variant="outline" size="sm" asChild>
+                    <a 
+                      href={requestForProductionType.pdfUrl} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="flex items-center"
