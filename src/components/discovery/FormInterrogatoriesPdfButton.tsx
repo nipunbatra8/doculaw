@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
-import { FileText, Download, Loader2, AlertCircle, Eye, FileCheck, RefreshCcw, X } from 'lucide-react';
+import { FileText, Download, Loader2, AlertCircle, Eye, FileCheck, RefreshCcw, X, Info } from 'lucide-react';
 import { fillFormInterrogatories, downloadPdf, downloadPdfFromCourts } from '@/integrations/pdf/client';
 import { 
   ComplaintInformation, 
@@ -327,16 +327,19 @@ const FormInterrogatoriesPdfButton = ({
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <Button onClick={handlePreviewFilledPdf} variant="outline" className="w-full" disabled={isProcessingPreview}>
-            {isProcessingPreview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
-            Preview Filled PDF
+          <Button onClick={handlePreviewFilledPdf} variant="outline" className="w-full" >
+            <Eye className="mr-2 h-4 w-4" /> Preview PDF
           </Button>
           <Button onClick={handleDownloadPdf} className="w-full">
-            <Download className="mr-2 h-4 w-4" /> Download PDF
+            <Download className="mr-2 h-4 w-4" /> Download
           </Button>
           <Button onClick={handleRegenerate} variant="secondary" className="w-full">
             <RefreshCcw className="mr-2 h-4 w-4" /> Regenerate
           </Button>
+        </div>
+        <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-600 flex items-start">
+          <Info className="h-4 w-4 mr-2 flex-shrink-0 text-gray-500 mt-0.5" />
+          <span>To get a non-editable version, use the 'Print' function in your PDF viewer after download, or the print icon in the preview window (usually top right).</span>
         </div>
 
         <Dialog open={showPdfDialog} onOpenChange={setShowPdfDialog}>
@@ -356,10 +359,14 @@ const FormInterrogatoriesPdfButton = ({
                 </div>
               )}
             </div>
-            <div className="flex justify-end items-center mt-4 space-x-2">
+            <div className="text-xs text-gray-600 mt-3 p-2 bg-gray-50 border border-gray-200 rounded-md flex items-start">
+              <Info className="h-4 w-4 mr-2 flex-shrink-0 text-gray-500 mt-0.5" />
+              <span>To get a non-editable (flattened) version, use the print icon in the preview window (usually top right) or the 'Print' function in your PDF viewer after downloading.</span>
+            </div>
+            <div className="flex justify-end items-center mt-2 space-x-2">
               <Button onClick={handleDownloadPdf} variant="outline" size="sm">
                 <Download className="h-4 w-4 mr-2" />
-                Download
+                Download Editable Version
               </Button>
               <DialogClose asChild>
                 <Button variant="outline" size="sm">
