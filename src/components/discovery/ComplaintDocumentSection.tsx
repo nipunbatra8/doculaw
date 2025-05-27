@@ -25,14 +25,12 @@ interface ComplaintDocumentSectionProps {
   complaintDocument: Document;
   onViewComplaint: () => void;
   onReplaceComplaint: () => void;
-  onGenerateDocuments: () => void;
 }
 
 const ComplaintDocumentSection = ({ 
   complaintDocument, 
   onViewComplaint, 
-  onReplaceComplaint, 
-  onGenerateDocuments 
+  onReplaceComplaint
 }: ComplaintDocumentSectionProps) => {
   return (
     <Card className="mb-6">
@@ -69,13 +67,6 @@ const ComplaintDocumentSection = ({
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Replace Complaint
-          </Button>
-          <Button 
-            onClick={onGenerateDocuments}
-            className="flex items-center"
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Generate Discovery Documents
           </Button>
         </div>
       </CardContent>

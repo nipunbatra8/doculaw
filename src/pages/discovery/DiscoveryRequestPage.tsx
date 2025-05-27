@@ -474,7 +474,6 @@ const DiscoveryRequestPage = () => {
             complaintDocument={complaintDocument}
             onViewComplaint={handleViewComplaint}
             onReplaceComplaint={handleReplaceComplaint}
-            onGenerateDocuments={handleSkipToSelection}
           />
         )}
 

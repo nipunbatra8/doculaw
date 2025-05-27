@@ -557,10 +557,6 @@ const RequestForProductionPdfButton: React.FC<RequestForProductionPdfButtonProps
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               <span>Request for Production Preview</span>
-              <DialogClose className="ml-auto">
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </DialogClose>
             </DialogTitle>
           </DialogHeader>
           
@@ -570,54 +566,24 @@ const RequestForProductionPdfButton: React.FC<RequestForProductionPdfButtonProps
             </PDFViewer>
           </div>
           
-          <div className="flex justify-between items-center mt-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
+          <div className="flex justify-end items-center mt-4 space-x-2">
+            <PDFDownloadLink 
+              document={<RequestForProductionPdfDocument extractedData={extractedData} />} 
+              fileName={`Request_for_Production_${extractedData.case?.caseNumber || ''}.pdf`}
+              className="inline-flex"
             >
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              Previous
-            </Button>
-            
-            <div className="text-sm">
-              Page {currentPage} of {totalPages}
-            </div>
-            
-            <div className="flex gap-2">
-              <PDFDownloadLink 
-                document={<RequestForProductionPdfDocument extractedData={extractedData} />} 
-                fileName={`Request_for_Production_${extractedData.case?.caseNumber || ''}.pdf`}
-                className="inline-flex"
-              >
-                {({ loading }) => (
-                  <Button variant="outline" size="sm" disabled={loading}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
-                )}
-              </PDFDownloadLink>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => window.print()}
-              >
-                <Printer className="h-4 w-4 mr-2" />
-                Print
+              {({ loading }) => (
+                <Button variant="outline" size="sm" disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                  Download
+                </Button>
+              )}
+            </PDFDownloadLink>
+            <DialogClose asChild>
+              <Button variant="outline" size="sm">
+                Close
               </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-                <ChevronRight className="h-4 w-4 ml-2" />
-              </Button>
-            </div>
+            </DialogClose>
           </div>
         </DialogContent>
       </Dialog>

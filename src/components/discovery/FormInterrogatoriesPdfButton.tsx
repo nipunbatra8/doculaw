@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { FileText, Download, Loader2, AlertCircle, Eye, FileCheck } from 'lucide-react';
+import { FileText, Download, Loader2, AlertCircle, Eye, FileCheck, RefreshCcw } from 'lucide-react';
 import { fillFormInterrogatories, downloadPdf, inspectPdfFields, downloadPdfFromCourts } from '@/integrations/pdf/client';
 import { 
   ComplaintInformation, 
@@ -30,6 +30,13 @@ const FormInterrogatoriesPdfButton = ({
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
   const { toast } = useToast();
   const { getComplaintFileAsBase64 } = useCaseDocuments();
+
+  // useEffect to auto-generate when component is shown and ready
+  useEffect(() => {
+    if (extractedData && caseId && !isGenerated && !isProcessing && !errorDetails) {
+      handleGenerateFormInterrogatories();
+    }
+  }, [extractedData, caseId, isGenerated, isProcessing, errorDetails]);
 
   // Generate form interrogatories with AI-enhanced data
   const handleGenerateFormInterrogatories = async () => {
@@ -292,28 +299,6 @@ const FormInterrogatoriesPdfButton = ({
     }
   };
 
-  // Inspect PDF fields
-  const handleInspectFields = async () => {
-    setIsInspecting(true);
-    
-    try {
-      await inspectPdfFields();
-      toast({
-        title: 'PDF Fields Inspected',
-        description: 'Check browser console for field details.',
-      });
-    } catch (error) {
-      console.error('Error inspecting PDF fields:', error);
-      toast({
-        title: 'Inspection Failed',
-        description: 'Failed to inspect PDF fields. See console for details.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsInspecting(false);
-    }
-  };
-
   // Direct download of original blank form
   const handleDownloadOriginalForm = async () => {
     setIsProcessing(true);
@@ -338,123 +323,78 @@ const FormInterrogatoriesPdfButton = ({
     }
   };
 
-  return (
-    <div className="space-y-4">
-      {!isGenerated ? (
-        <div>
-          <Button 
-            onClick={handleGenerateFormInterrogatories}
-            disabled={isProcessing || isInspecting || (!extractedData && !caseId)}
-            variant="default"
-            className="flex items-center gap-2 w-full sm:w-auto"
-          >
-            {isProcessing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <FileCheck className="h-4 w-4" />
-            )}
-            Generate Form Interrogatories
-          </Button>
-          
-          {isProcessing && (
-            <div className="mt-2 text-sm text-gray-600 animate-pulse">
-              {analysisMessage || 'Analyzing document and preparing form...'}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {analysisMessage && (
-            <div className="text-sm bg-blue-50 text-blue-800 p-3 rounded-md border border-blue-100 whitespace-pre-line">
-              {analysisMessage}
-            </div>
-          )}
-          
-          <div className="flex flex-col sm:flex-row gap-3">
-            <FormInterrogatoriesPreview 
-              extractedData={enhancedData}
-              onEditData={onEditExtractedData || (() => {})}
-              caseId={caseId}
-            />
-            
-            <Button 
-              onClick={handleDownloadPdf}
-              disabled={isProcessing}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              {isProcessing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
-              Download PDF
-            </Button>
-            
-            <Button
-              onClick={() => {
-                setIsGenerated(false);
-                setEnhancedData(null);
-                setAnalysisMessage(null);
-              }}
-              variant="ghost"
-              size="sm"
-              className="flex items-center gap-2"
-            >
-              Regenerate
-            </Button>
-          </div>
-        </div>
-      )}
-      
-      <div className="flex items-center gap-2">
-        <Button
-          onClick={handleInspectFields}
-          disabled={isProcessing || isInspecting}
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2"
-        >
-          {isInspecting ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <FileText className="h-3 w-3" />
-          )}
-          Inspect PDF Fields
+  const handleRegenerate = () => {
+    setIsGenerated(false);
+    setEnhancedData(null);
+    setAnalysisMessage(null);
+    setErrorDetails(null);
+    // The useEffect will pick this up and trigger auto-generation
+  };
+
+  if (isProcessing) {
+    return (
+      <Button disabled className="w-full">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        Processing...
+      </Button>
+    );
+  }
+
+  if (errorDetails) {
+    return (
+      <div className="space-y-2 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-red-500" />
+        <p className="text-sm font-medium text-red-600">Generation Failed</p>
+        <p className="text-xs text-gray-500">{errorDetails}</p>
+        <Button onClick={handleDownloadOriginalForm} variant="outline" className="w-full mt-2">
+          <Download className="mr-2 h-4 w-4" /> Download Blank Form
+        </Button>
+        <Button onClick={handleRegenerate} variant="secondary" className="w-full mt-2">
+           <RefreshCcw className="mr-2 h-4 w-4" /> Try Again
         </Button>
       </div>
-      
-      {errorDetails && (
-        <div className="text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200 space-y-2">
-          <div className="flex gap-2 items-start">
-            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            <div>
-              {errorDetails}
-            </div>
+    );
+  }
+
+  if (isGenerated && enhancedData) {
+    return (
+      <div className="space-y-2">
+        {analysisMessage && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-700 whitespace-pre-wrap">
+            <p className="font-medium mb-1">Analysis Complete:</p>
+            {analysisMessage}
           </div>
-          
-          <div className="pt-1 border-t border-red-200">
-            <p className="mb-2 font-medium">Alternative options:</p>
-            <div className="flex flex-wrap gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="flex items-center gap-1"
-                onClick={handleDownloadOriginalForm}
-                disabled={isProcessing || isInspecting}
-              >
-                {isProcessing ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Download className="h-3 w-3" />
-                )} 
-                Download blank form
-              </Button>
-            </div>
-            <span className="text-gray-500 text-xs block mt-2">You can manually fill in the information.</span>
-          </div>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <Button onClick={handleDownloadOriginalForm} variant="outline" className="w-full">
+            <Eye className="mr-2 h-4 w-4" /> Preview Form
+          </Button>
+          <Button onClick={handleDownloadPdf} className="w-full">
+            <Download className="mr-2 h-4 w-4" /> Download PDF
+          </Button>
+          <Button onClick={handleRegenerate} variant="secondary" className="w-full">
+            <RefreshCcw className="mr-2 h-4 w-4" /> Regenerate
+          </Button>
         </div>
+      </div>
+    );
+  }
+
+  // This section will be briefly visible before useEffect kicks in, or if auto-generation conditions aren't met.
+  return (
+    <div className="space-y-2">
+      <Button onClick={handleGenerateFormInterrogatories} className="w-full">
+        <FileCheck className="mr-2 h-4 w-4" /> Generate Document
+      </Button>
+      {onEditExtractedData && (
+         <Button onClick={onEditExtractedData} variant="link" size="sm" className="w-full text-xs">
+            Edit Extracted Information
+        </Button>
       )}
+      {/* <Button onClick={handleInspectFields} disabled={isInspecting} variant="ghost" size="sm" className="w-full text-xs">
+        {isInspecting ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : null}
+        Inspect PDF Fields (Dev)
+      </Button> */}
     </div>
   );
 };
