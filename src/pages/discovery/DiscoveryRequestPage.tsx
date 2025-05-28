@@ -100,6 +100,7 @@ const DiscoveryRequestPage = () => {
   const [complaintDocument, setComplaintDocument] = useState<Document | null>(null);
   const [isViewingComplaint, setIsViewingComplaint] = useState(false);
   const [replacingComplaint, setReplacingComplaint] = useState(false);
+  const [oldComplaintPath, setOldComplaintPath] = useState<string | null>(null);
 
   // Fetch case details
   const { data: caseData, isLoading: isLoadingCase } = useQuery<CaseData>({
@@ -173,6 +174,41 @@ const DiscoveryRequestPage = () => {
     setIsExtracting(true);
     
     try {
+      // If we were replacing a complaint, and we have the old path, delete it from storage
+      if (replacingComplaint && oldComplaintPath && user) {
+        const { error: deleteStorageError } = await supabase.storage
+          .from('doculaw')
+          .remove([oldComplaintPath]);
+
+        if (deleteStorageError) {
+          console.error('Error deleting old complaint from storage:', deleteStorageError);
+          // Not throwing an error here, as the main goal is to upload the new one
+          // But we should log it and potentially notify the user
+          toast({
+            title: "Warning",
+            description: "Could not remove the old complaint file from storage. Please check manually.",
+            variant: "default", // Use a less intrusive variant
+          });
+        }
+
+        // Also delete the old complaint document record from the 'documents' table
+        if (complaintDocument) { // Ensure complaintDocument is not null
+            const { error: deleteDbError } = await supabase
+                .from('documents')
+                .delete()
+                .eq('id', complaintDocument.id);
+            if (deleteDbError) {
+                console.error('Error deleting old complaint from database:', deleteDbError);
+                toast({
+                    title: "Warning",
+                    description: "Could not remove the old complaint record from the database.",
+                    variant: "default",
+                });
+            }
+        }
+        setOldComplaintPath(null); // Clear the old path
+      }
+
       // Call the Gemini API to extract information from the document text
       const extractedInfo = await extractComplaintInformation(fileText);
       
@@ -249,6 +285,9 @@ const DiscoveryRequestPage = () => {
 
   // Function to handle replacing the complaint
   const handleReplaceComplaint = () => {
+    if (complaintDocument) { // Store the path of the current complaint
+      setOldComplaintPath(complaintDocument.path);
+    }
     setReplacingComplaint(true);
     setCurrentStep(STEPS.UPLOAD_COMPLAINT);
   };
