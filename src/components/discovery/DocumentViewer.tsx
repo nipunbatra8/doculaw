@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useAuth } from "@/context/AuthContext";
 
 // Define Document type
 interface Document {
@@ -36,6 +37,7 @@ interface DocumentViewerProps {
 
 const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [isFromStorage, setIsFromStorage] = useState<boolean>(false);
@@ -114,7 +116,7 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
   };
 
   const fetchFromStorage = async () => {
-    if (!documentId) return;
+    if (!documentId || !user) return;
     
     try {
       // Use the provided caseId or try to get it from the URL
@@ -129,7 +131,7 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
       // List files in the case directory
       const { data: files, error } = await supabase.storage
         .from('doculaw')
-        .list(`cases/${effectiveCaseId}`);
+        .list(`${user.id}/cases/${effectiveCaseId}`);
       
       if (error) throw error;
       
@@ -139,7 +141,7 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
       if (!file) throw new Error("File not found in storage");
       
       // Get the file path
-      const filePath = `cases/${effectiveCaseId}/${file.name}`;
+      const filePath = `${user.id}/cases/${effectiveCaseId}/${file.name}`;
       
       // Create a signed URL with 1 hour expiry
       const { data: signedUrlData, error: signedUrlError } = await supabase.storage
@@ -151,7 +153,7 @@ const DocumentViewer = ({ documentId, caseId, open, onClose }: DocumentViewerPro
       // Create a document object
       const storageDocument: Document = {
         id: documentId,
-        user_id: '', // We don't know the user ID from storage
+        user_id: user.id,
         case_id: effectiveCaseId,
         name: file.name,
         path: filePath,

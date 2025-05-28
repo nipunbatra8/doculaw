@@ -1458,7 +1458,7 @@ const CaseDocuments = ({
         // Also check the storage bucket directly
         const { data: storageData, error: storageError } = await supabase.storage
           .from('doculaw')
-          .list(`cases/${caseId}`, {
+          .list(`${user.id}/cases/${caseId}`, {
             sortBy: { column: 'name', order: 'desc' }
           });
         
@@ -1471,7 +1471,7 @@ const CaseDocuments = ({
         for (const item of storageData || []) {
           if (!item.id || item.id === '.emptyFolderPlaceholder') continue;
           
-          const filePath = `cases/${caseId}/${item.name}`;
+          const filePath = `${user.id}/cases/${caseId}/${item.name}`;
           
           // Skip if this file is already in the database
           if (dbPaths.has(filePath)) continue;

@@ -47,7 +47,7 @@ export const useCaseDocuments = () => {
 
       // If we don't have the text stored, try to fetch the document file
       const { data: fileData, error: fileError } = await supabase.storage
-        .from('documents')
+        .from('doculaw')
         .download(documentData.path);
 
       if (fileError) {
@@ -116,7 +116,7 @@ export const useCaseDocuments = () => {
 
       // Download the document file
       const { data: fileData, error: fileError } = await supabase.storage
-        .from('documents')
+        .from('doculaw')
         .download(documentData.path);
 
       if (fileError) {

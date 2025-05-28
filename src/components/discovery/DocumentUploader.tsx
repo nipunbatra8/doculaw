@@ -108,10 +108,10 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
         // Structure: cases/[case_id]/[file_type]_[timestamp].pdf
         const fileExtension = file.name.split('.').pop() || 'pdf';
         displayName = `${fileType}_${timestamp}.${fileExtension}`;
-        filePath = `cases/${caseId}/${displayName}`;
+        filePath = `${user.id}/cases/${caseId}/${displayName}`;
       } else {
         // Fallback for documents not associated with a case yet
-        filePath = `documents/${user.id}/${timestamp}_${file.name}`;
+        filePath = `${user.id}/documents/${timestamp}_${file.name}`;
       }
       
       const { data: uploadData, error: uploadError } = await supabase.storage
