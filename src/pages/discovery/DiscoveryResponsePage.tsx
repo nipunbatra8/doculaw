@@ -1,6 +1,5 @@
-
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,10 +46,15 @@ import {
   SendIcon,
   Edit,
   Eye,
-  Download
+  Download,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+
+// Imports for fetching case data
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 
 // Mock objections data
 const suggestedObjections = [
@@ -103,10 +107,27 @@ const clientsData = [
   { id: "client3", name: "Michael Williams", email: "m.williams@example.com" },
 ];
 
+// Define CaseData type (similar to DiscoveryRequestPage)
+interface CaseData {
+  id: string;
+  name: string;
+  case_number: string;
+  client_name: string; // Assuming a field like this exists or needs to be created
+  court: string;
+  case_type: string; // Assuming a field like this exists
+  user_id: string;
+  created_at: string;
+  // Add other relevant fields from your 'cases' table
+  complaint_document_url?: string;
+  complaint_processed?: boolean;
+  complaint_data?: Record<string, unknown>; // Using a more specific type than any
+}
+
 const DiscoveryResponsePage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const [activeStep, setActiveStep] = useState(1);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -123,15 +144,55 @@ const DiscoveryResponsePage = () => {
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Mock case data
-  const caseData = {
-    id: caseId,
-    name: "Smith v. Johnson",
-    caseNumber: "CV-2023-12345",
-    client: "John Smith",
-    court: "County Court",
-    type: "Personal Injury"
-  };
+  // Fetch case details
+  const { data: caseData, isLoading: isLoadingCase } = useQuery<CaseData | null>({
+    queryKey: ['case', caseId],
+    queryFn: async () => {
+      if (!user || !caseId) return null;
+      
+      const { data, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('id', caseId)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) {
+        console.error("Error fetching case data:", error);
+        toast({
+          title: "Error",
+          description: "Could not fetch case data.",
+          variant: "destructive",
+        });
+        throw error;
+      }
+      return data;
+    },
+    enabled: !!user && !!caseId,
+  });
+
+  // Loading state
+  if (isLoadingCase) {
+    return (
+      <DashboardLayout>
+        <div className="p-6 animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/3 mb-8"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2">
+              <div className="h-16 bg-gray-200 rounded mb-6"></div>
+              <div className="h-96 bg-gray-200 rounded"></div>
+            </div>
+            <div className="space-y-6">
+              <div className="h-40 bg-gray-200 rounded"></div>
+              <div className="h-40 bg-gray-200 rounded"></div>
+              <div className="h-20 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -272,14 +333,18 @@ const DiscoveryResponsePage = () => {
               variant="ghost"
               size="sm"
               className="mr-2"
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate(`/case/${caseId}`)}
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back
             </Button>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Draft Discovery Response</h1>
-              <p className="text-gray-600 mt-1">Create a comprehensive response to discovery requests</p>
+              <p className="text-gray-600 mt-1">Create a comprehensive response to discovery requests for{" "}
+                <Link to={`/case/${caseId}`} className="text-blue-600 hover:underline">
+                  {caseData?.name || "this case"}
+                </Link>
+              </p>
             </div>
           </div>
         </div>
@@ -794,37 +859,6 @@ const DiscoveryResponsePage = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <Info className="h-5 w-5 mr-2 text-doculaw-500" />
-                  Case Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-sm text-gray-500">Case Name</p>
-                  <p className="font-medium">{caseData.name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Case Number</p>
-                  <p className="font-medium">{caseData.caseNumber}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Client</p>
-                  <p className="font-medium">{caseData.client}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Court</p>
-                  <p className="font-medium">{caseData.court}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Case Type</p>
-                  <p className="font-medium">{caseData.type}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
                   <AlertCircle className="h-5 w-5 mr-2 text-amber-500" />
                   Discovery Tips
                 </CardTitle>
@@ -851,15 +885,17 @@ const DiscoveryResponsePage = () => {
               </CardContent>
             </Card>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <h3 className="font-medium text-amber-800 mb-2 flex items-center">
-                <AlertTriangle className="h-4 w-4 mr-2" />
-                Response Deadline
-              </h3>
-              <p className="text-sm text-amber-700">
-                Based on the uploaded document, the response deadline is <span className="font-semibold">September 15, 2023</span> (30 days from service date).
-              </p>
-            </div>
+            {(activeStep === 2 || activeStep === 6) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h3 className="font-medium text-amber-800 mb-2 flex items-center">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Response Deadline
+                </h3>
+                <p className="text-sm text-amber-700">
+                  Based on the uploaded document, the response deadline is <span className="font-semibold">September 15, 2023</span> (30 days from service date).
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -878,7 +914,7 @@ const DiscoveryResponsePage = () => {
             <div className="text-center py-4 border-b">
               <img src="/lovable-uploads/0be20ac4-7ddb-481d-a2f7-35e04e74334b.png" alt="DocuLaw Logo" className="h-10 w-auto mx-auto mb-2" />
               <h2 className="text-xl font-bold">Discovery Questionnaire</h2>
-              <p className="text-gray-500">Smith v. Johnson • Case #CV-2023-12345</p>
+              <p className="text-gray-500">{caseData?.name || "Case Name"} • Case #{caseData?.case_number || "Case Number"}</p>
             </div>
             
             <div className="space-y-2">
@@ -939,7 +975,7 @@ const DiscoveryResponsePage = () => {
           
           <div className="py-4">
             <div className="rounded-lg border p-4 bg-gray-50">
-              <h4 className="font-medium mb-1">Smith v. Johnson - Responses to First Set of Interrogatories</h4>
+              <h4 className="font-medium mb-1">{caseData?.name || "Case Name"} - Responses to First Set of Interrogatories</h4>
               <p className="text-sm text-gray-500 mb-3">
                 Generated on {new Date().toLocaleDateString()}
               </p>
