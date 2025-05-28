@@ -20,7 +20,6 @@ import { extractComplaintInformation, ComplaintInformation } from "@/integration
 import CaseInformationCard from "@/components/discovery/CaseInformationCard";
 import ComplaintDocumentSection from "@/components/discovery/ComplaintDocumentSection";
 import UploadComplaintSection from "@/components/discovery/UploadComplaintSection";
-import SelectDocumentsSection from "@/components/discovery/SelectDocumentsSection";
 import GeneratedDocumentsSection from "@/components/discovery/GeneratedDocumentsSection";
 import InitialScreen from "@/components/discovery/InitialScreen";
 import HelpSection from "@/components/discovery/HelpSection";
@@ -543,21 +542,6 @@ const DiscoveryRequestPage = () => {
           />
         )}
         
-        {currentStep === STEPS.SELECT_DOCUMENTS && (
-          <SelectDocumentsSection 
-            complaintDocument={complaintDocument}
-            extractedData={extractedData}
-            selectedDocumentTypes={selectedDocumentTypes}
-            discoveryTypes={discoveryTypes}
-            onToggleDocumentType={toggleDocumentType}
-            onGenerateDocuments={handleSelectDocuments}
-            onReplaceComplaint={handleReplaceComplaint}
-            onViewComplaint={handleViewComplaint}
-            onEditExtractedData={() => setShowExtractedDataDialog(true)}
-            caseId={caseId}
-          />
-        )}
-
         {/* Show initial screen at UPLOAD_COMPLAINT step when we're not actively uploading */}
         {currentStep === STEPS.UPLOAD_COMPLAINT && !replacingComplaint && !isExtracting && !uploadedFileUrl && (
           <InitialScreen 
