@@ -79,25 +79,13 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
     setExtractionProgress(0);
     
     try {
-      // Start simulating upload progress for UI
-      const simulateProgress = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 95) {
-            clearInterval(simulateProgress);
-            return 95;
-          }
-          return prev + 5;
-        });
-      }, 200);
-      
-      // Set extraction progress to indicate it's working
-      setExtractionProgress(50);
-      
-      // Extract text using react-pdftotext
+      // Start text extraction first
+      setExtractionProgress(10);
       const extractedText = await pdfToText(file);
-      
-      // Extraction is complete
       setExtractionProgress(100);
+      
+      // Start file upload
+      setUploadProgress(10);
       
       // Upload file to Supabase storage with improved naming
       const timestamp = new Date().getTime();
@@ -115,6 +103,8 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
         filePath = `${user.id}/documents/${timestamp}_${file.name}`;
       }
       
+      setUploadProgress(30);
+      
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('doculaw')
         .upload(filePath, file, {
@@ -126,6 +116,8 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
         throw new Error(`Upload error: ${uploadError.message}`);
       }
       
+      setUploadProgress(60);
+      
       // Get a signed URL for the file (valid for 1 hour)
       const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from('doculaw')
@@ -134,6 +126,8 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
       if (signedUrlError) {
         throw new Error(`Signed URL error: ${signedUrlError.message}`);
       }
+      
+      setUploadProgress(80);
       
       // If this is a complaint document and we have a case ID, process and store the complaint data
       if (fileType === 'complaint' && caseId) {
@@ -161,6 +155,8 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
         }
       }
       
+      setUploadProgress(90);
+      
       // Save document metadata to Supabase - don't save extracted_text anymore
       await supabase
         .from('documents')
@@ -175,8 +171,6 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
           created_at: new Date().toISOString()
         });
       
-      // Simulate upload completion
-      clearInterval(simulateProgress);
       setUploadProgress(100);
       
       toast({
@@ -184,14 +178,12 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
         description: "Your document has been uploaded and processed.",
       });
       
-      setTimeout(() => {
-        // Pass both the file URL and the extracted text to the parent component
-        onFileUploaded(signedUrlData.signedUrl, extractedText, displayName);
-        setUploading(false);
-        setFile(null);
-        setUploadProgress(0);
-        setExtractionProgress(0);
-      }, 500);
+      // Pass both the file URL and the extracted text to the parent component
+      onFileUploaded(signedUrlData.signedUrl, extractedText, displayName);
+      setUploading(false);
+      setFile(null);
+      setUploadProgress(0);
+      setExtractionProgress(0);
       
     } catch (error) {
       console.error("Error processing PDF:", error);
@@ -201,6 +193,7 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
         variant: "destructive",
       });
       setUploading(false);
+      setUploadProgress(0);
       setExtractionProgress(0);
     }
   };

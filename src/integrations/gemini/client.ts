@@ -94,7 +94,7 @@ export async function extractComplaintInformationFromFile(
     
     // Use Gemini's vision capabilities for multimodal processing
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro-vision",
+      model: "gemini-1.5-pro",
       safetySettings,
     });
     
@@ -252,7 +252,7 @@ async function extractTextFromFile(fileBase64: string, mimeType: string): Promis
   try {
     // Use Gemini's vision capabilities for OCR
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro-vision",
+      model: "gemini-1.5-pro",
       safetySettings,
     });
     
