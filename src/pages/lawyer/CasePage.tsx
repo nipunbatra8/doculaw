@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -28,12 +29,15 @@ import {
 type CaseData = {
   id: string;
   name: string;
-  description: string | null;
+  clients: string[] | null;
   case_type: string | null;
   status: string;
   created_at: string;
   updated_at: string;
   user_id: string;
+  archived_at: string | null;
+  complaint_processed?: boolean | null;
+  complaint_data?: any;
 };
 
 const CasePage = () => {
@@ -70,7 +74,7 @@ const CasePage = () => {
   useEffect(() => {
     if (caseData) {
       setCaseName(caseData.name);
-      setCaseDescription(caseData.description || "");
+      setCaseDescription(""); // No description field in database
       setCaseStatus(caseData.status);
       setCaseType(caseData.case_type || "");
     }
@@ -84,7 +88,6 @@ const CasePage = () => {
         .from('cases')
         .update({
           name: caseName,
-          description: caseDescription,
           status: caseStatus,
           case_type: caseType,
           updated_at: new Date().toISOString()
@@ -176,12 +179,6 @@ const CasePage = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700">
-                      Description
-                    </p>
-                    <p>{caseData.description || "No description provided."}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">
                       Case Type
                     </p>
                     <p>{caseData.case_type || "No case type specified."}</p>
@@ -252,17 +249,6 @@ const CasePage = () => {
                 id="name"
                 value={caseName}
                 onChange={(e) => setCaseName(e.target.value)}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">
-                Description
-              </Label>
-              <Textarea
-                id="description"
-                value={caseDescription}
-                onChange={(e) => setCaseDescription(e.target.value)}
                 className="col-span-3"
               />
             </div>

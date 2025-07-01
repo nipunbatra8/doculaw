@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -140,17 +141,20 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
           // Extract complaint information using the Gemini API
           const complaintInfo = await extractComplaintInformation(extractedText);
           
+          // Convert to JSON-compatible format for Supabase
+          const complaintData = JSON.parse(JSON.stringify(complaintInfo));
+          
           // Save the complaint data directly to the case record
           await supabase
             .from('cases')
             .update({
               complaint_processed: true,
-              complaint_data: complaintInfo,
+              complaint_data: complaintData,
               updated_at: new Date().toISOString()
             })
             .eq('id', caseId);
             
-          console.log('Complaint data saved to case record:', complaintInfo);
+          console.log('Complaint data saved to case record:', complaintData);
         } catch (complaintError) {
           console.error('Error processing complaint data:', complaintError);
           // Continue with document upload even if complaint processing fails

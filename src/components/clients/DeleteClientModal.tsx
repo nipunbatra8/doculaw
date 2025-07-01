@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,7 +46,7 @@ const DeleteClientModal = ({ open, onClose, onSuccess, client }: DeleteClientMod
         .from('documents')
         .delete()
         .eq('user_id', client.user_id || '')
-        .or(`path.ilike.%/clients/${client.id}/%`);
+        .ilike('path', `%/clients/${client.id}/%`);
 
       if (documentsError) {
         console.error("Error deleting client documents:", documentsError);
@@ -53,29 +54,28 @@ const DeleteClientModal = ({ open, onClose, onSuccess, client }: DeleteClientMod
       }
 
       // 2. Update any cases linked to this client
-      // First, get any cases that reference this client
       const { data: casesData, error: casesFetchError } = await supabase
         .from('cases')
-        .select('id, name')
-        .eq('client', client.id);
+        .select('id, name, clients')
+        .contains('clients', [client.id]);
 
       if (casesFetchError) {
         console.error("Error fetching client cases:", casesFetchError);
       } else if (casesData && casesData.length > 0) {
-        // For each case, update it to remove the client reference but keep a record
-        const updatePromises = casesData.map(caseItem => {
-          return supabase
+        // For each case, remove the client from the clients array
+        for (const caseItem of casesData) {
+          const updatedClients = (caseItem.clients || []).filter(clientId => clientId !== client.id);
+          
+          await supabase
             .from('cases')
             .update({
-              client: null,
-              name: `${caseItem.name} (Client Deleted: ${client.first_name} ${client.last_name})`
+              clients: updatedClients.length > 0 ? updatedClients : null,
+              name: updatedClients.length === 0 
+                ? `${caseItem.name} (Client Deleted: ${client.first_name} ${client.last_name})`
+                : caseItem.name
             })
             .eq('id', caseItem.id);
-        });
-
-        await Promise.all(updatePromises).catch(error => {
-          console.error("Error updating cases:", error);
-        });
+        }
       }
 
       // 3. Delete the client from auth if they have a user account
@@ -107,11 +107,11 @@ const DeleteClientModal = ({ open, onClose, onSuccess, client }: DeleteClientMod
 
       onSuccess();
       onClose();
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error("Error deleting client:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete client. Please try again.",
+        description: error?.message || "Failed to delete client. Please try again.",
         variant: "destructive",
       });
     } finally {

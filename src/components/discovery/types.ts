@@ -1,3 +1,4 @@
+
 import { ComplaintInformation } from "@/integrations/gemini/client";
 
 export interface Document {
@@ -15,15 +16,15 @@ export interface Document {
 export interface CaseData {
   id: string;
   name: string;
-  client: string | null;
+  clients: string[] | null; // Changed from client to clients (array)
   case_type: string | null;
   status: string;
   created_at: string;
   updated_at: string;
   user_id: string;
   archived_at: string | null;
-  complaint_processed?: boolean;
-  complaint_data?: ComplaintInformation;
+  complaint_processed?: boolean | null;
+  complaint_data?: ComplaintInformation | null; // Allow null
 }
 
 export interface DiscoveryType {
