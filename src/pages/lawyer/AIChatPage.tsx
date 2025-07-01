@@ -1,10 +1,10 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { format, parseISO } from "date-fns";
 
 // UI Components
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -15,6 +15,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Icons
 import { 
@@ -27,8 +35,12 @@ import {
   Trash2,
   Download,
   Edit3,
-  Plus
+  Plus,
+  AlertTriangle
 } from "lucide-react";
+
+// Components
+import DocumentViewer from "@/components/discovery/DocumentViewer";
 
 // Types
 interface ChatMessage {
@@ -47,11 +59,27 @@ interface UploadedFile {
   url?: string;
 }
 
+interface Document {
+  id: string;
+  user_id: string;
+  case_id: string | null;
+  name: string;
+  path: string;
+  url: string;
+  type: string;
+  size: number;
+  extracted_text: string | null;
+  created_at: string;
+  updated_at: string | null;
+  fromStorage?: boolean;
+}
+
 const AIChatPage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   // State
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -66,6 +94,14 @@ const AIChatPage = () => {
   const [currentMessage, setCurrentMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  
+  // Document viewer state
+  const [viewingDocumentId, setViewingDocumentId] = useState<string | null>(null);
+  const [showDocumentViewer, setShowDocumentViewer] = useState<boolean>(false);
+  
+  // Document deletion state
+  const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState<string>("");
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +125,116 @@ const AIChatPage = () => {
     },
     enabled: !!user && !!caseId
   });
+
+  // Fetch case documents
+  const { data: caseDocuments, isLoading: isLoadingDocuments } = useQuery({
+    queryKey: ['case-documents', caseId],
+    queryFn: async () => {
+      if (!user || !caseId) return [];
+      
+      try {
+        // Fetch database records first
+        const { data: dbDocuments, error: dbError } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('case_id', caseId)
+          .order('created_at', { ascending: false });
+        
+        if (dbError) throw dbError;
+        
+        // Also check the storage bucket directly
+        const { data: storageData, error: storageError } = await supabase.storage
+          .from('doculaw')
+          .list(`${user.id}/cases/${caseId}`, {
+            sortBy: { column: 'name', order: 'desc' }
+          });
+        
+        if (storageError) throw storageError;
+        
+        // Create document objects for storage files that aren't in the database
+        const dbPaths = new Set((dbDocuments || []).map(doc => doc.path));
+        const storageDocuments: Document[] = [];
+        
+        for (const item of storageData || []) {
+          if (!item.id || item.id === '.emptyFolderPlaceholder') continue;
+          
+          const filePath = `${user.id}/cases/${caseId}/${item.name}`;
+          
+          // Skip if this file is already in the database
+          if (dbPaths.has(filePath)) continue;
+          
+          // Get a signed URL for the file
+          const signedUrl = await getSignedUrl(filePath);
+          
+          if (!signedUrl) continue;
+          
+          // Create a document object
+          storageDocuments.push({
+            id: item.id,
+            user_id: user.id,
+            case_id: caseId,
+            name: item.name,
+            path: filePath,
+            url: signedUrl,
+            type: getFileType(item.name),
+            size: item.metadata?.size || 0,
+            extracted_text: null,
+            created_at: item.created_at || new Date().toISOString(),
+            updated_at: null,
+            fromStorage: true
+          });
+        }
+        
+        // Get signed URLs for database documents as well and add fromStorage: false
+        const dbDocumentsWithSignedUrls = await Promise.all((dbDocuments || []).map(async (doc) => {
+          const signedUrl = await getSignedUrl(doc.path);
+          return {
+            ...doc,
+            url: signedUrl || doc.url, // Fall back to stored URL if signed URL fails
+            fromStorage: false
+          } as Document;
+        }));
+        
+        // Merge database and storage documents
+        return [...dbDocumentsWithSignedUrls, ...storageDocuments];
+      } catch (error) {
+        console.error('Error fetching documents:', error);
+        return [];
+      }
+    },
+    enabled: !!user && !!caseId
+  });
+
+  // Helper function to get signed URL
+  const getSignedUrl = async (filePath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('doculaw')
+        .createSignedUrl(filePath, 3600);
+      
+      if (error) throw error;
+      return data.signedUrl;
+    } catch (error) {
+      console.error('Error getting signed URL:', error);
+      return null;
+    }
+  };
+
+  // Helper function to determine file type from filename
+  const getFileType = (fileName: string) => {
+    const lowerName = fileName.toLowerCase();
+    if (lowerName.includes('complaint')) {
+      return 'complaint';
+    } else if (lowerName.includes('interrogator')) {
+      return 'interrogatories';
+    } else if (lowerName.includes('admission')) {
+      return 'admissions';
+    } else if (lowerName.includes('production')) {
+      return 'production';
+    } else {
+      return 'document';
+    }
+  };
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -117,26 +263,56 @@ const AIChatPage = () => {
   const handleFileUpload = async (files: File[]) => {
     for (const file of files) {
       try {
-        // Read file content for text files
-        let content = '';
-        if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
-          content = await file.text();
+        // Upload to Supabase storage
+        const filePath = `${user?.id}/cases/${caseId}/${Date.now()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('doculaw')
+          .upload(filePath, file);
+        
+        if (uploadError) throw uploadError;
+        
+        // Get signed URL
+        const { data: signedUrlData } = await supabase.storage
+          .from('doculaw')
+          .createSignedUrl(filePath, 3600);
+        
+        // Try to extract text if it's a PDF
+        let extractedText = null;
+        if (file.type === 'application/pdf') {
+          try {
+            const pdfToText = (await import('react-pdftotext')).default;
+            extractedText = await pdfToText(file);
+          } catch (extractError) {
+            console.error('Error extracting text:', extractError);
+            // Continue even if text extraction fails
+          }
         }
+        
+        // Add to database
+        const { error: insertError } = await supabase
+          .from('documents')
+          .insert({
+            user_id: user?.id,
+            case_id: caseId,
+            name: file.name,
+            path: filePath,
+            url: signedUrlData?.signedUrl || '',
+            type: getFileType(file.name),
+            size: file.size,
+            extracted_text: extractedText,
+            created_at: new Date().toISOString()
+          });
+        
+        if (insertError) throw insertError;
 
-        const newFile: UploadedFile = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          content
-        };
-
-        setUploadedFiles(prev => [...prev, newFile]);
         
         toast({
           title: "File Uploaded",
-          description: `${file.name} has been uploaded successfully.`,
+          description: `${file.name} has been uploaded successfully to the case documents.`,
         });
+
+        // Invalidate case documents query
+        queryClient.invalidateQueries({ queryKey: ['case-documents', caseId] });
       } catch (error) {
         console.error('Error uploading file:', error);
         toast({
@@ -167,7 +343,7 @@ const AIChatPage = () => {
       const aiResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content: `I understand you want to know about: "${currentMessage}". Based on the ${uploadedFiles.length} file(s) you've uploaded, I can help you analyze the content, suggest edits, or create new documents. What specific task would you like me to help you with?`,
+        content: `I understand you want to know about: "${currentMessage}". Based on the ${uploadedFiles.length} file(s) you've uploaded and the ${caseDocuments?.length || 0} case document(s), I can help you analyze the content, suggest edits, or create new documents. What specific task would you like me to help you with?`,
         timestamp: new Date()
       };
       
@@ -190,6 +366,55 @@ const AIChatPage = () => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const handleViewDocument = (documentId: string) => {
+    setViewingDocumentId(documentId);
+    setShowDocumentViewer(true);
+  };
+
+  const handleDeleteDocument = async () => {
+    if (!documentToDelete || !user || !caseId) return;
+    
+    try {
+      // Find the document
+      const docToDelete = caseDocuments?.find(doc => doc.id === documentToDelete);
+      if (!docToDelete) throw new Error("Document not found");
+      
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from('doculaw')
+        .remove([docToDelete.path]);
+        
+      if (storageError) throw storageError;
+      
+      // If it's in the database (not just storage), delete from database too
+      if (!docToDelete.fromStorage) {
+        const { error: deleteError } = await supabase
+          .from('documents')
+          .delete()
+          .eq('id', documentToDelete);
+          
+        if (deleteError) throw deleteError;
+      }
+      
+      toast({
+        title: "Document Deleted",
+        description: "The document has been removed from this case."
+      });
+      
+      // Invalidate case documents query
+      queryClient.invalidateQueries({ queryKey: ['case-documents', caseId] });
+      setDocumentToDelete(null);
+      setDeleteConfirmText("");
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete the document. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -237,10 +462,10 @@ const AIChatPage = () => {
             >
               <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Drop files here or click to upload
+                Drop additional files here or click to upload
               </h3>
               <p className="text-gray-500 mb-4">
-                Upload documents, PDFs, text files, or any case-related materials
+                Upload additional documents, PDFs, text files, or any case-related materials for AI analysis
               </p>
               <Button
                 onClick={() => fileInputRef.current?.click()}
@@ -262,32 +487,88 @@ const AIChatPage = () => {
               />
             </div>
 
-            {/* Uploaded Files */}
-            {uploadedFiles.length > 0 && (
-              <div className="mx-6 mb-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Uploaded Files</h3>
-                <div className="space-y-2">
-                  {uploadedFiles.map((file) => (
-                    <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <FileText className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                          <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+            {/* Case Documents Section */}
+            <div className="m-6 mb-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <FileText className="h-5 w-5 mr-2" />
+                    Case Documents
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingDocuments ? (
+                    <div className="animate-pulse space-y-4">
+                      <div className="h-16 bg-gray-200 rounded"></div>
+                      <div className="h-16 bg-gray-200 rounded"></div>
+                    </div>
+                  ) : caseDocuments && caseDocuments.length > 0 ? (
+                    <div className="space-y-3">
+                      {caseDocuments.map((doc) => (
+                        <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                          <div className="flex items-center space-x-3">
+                            <FileText className="h-5 w-5 text-blue-500" />
+                            <div>
+                              <div className="flex items-center">
+                                <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                                {doc.fromStorage && (
+                                  <Badge variant="outline" className="ml-2 text-amber-600 bg-amber-50 text-xs">
+                                    Storage Only
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                {formatFileSize(doc.size)} • Uploaded: {format(parseISO(doc.created_at), 'MMM d, yyyy')}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleViewDocument(doc.id)}
+                              title="View Document"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => window.open(doc.url, '_blank')}
+                              title="Download Document"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setDocumentToDelete(doc.id)}
+                              title="Delete Document"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeFile(file.id)}
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500 py-8">
+                      <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>No documents have been uploaded to this case yet.</p>
+                      <Button 
+                        variant="outline" 
+                        className="mt-4"
+                        onClick={() => navigate(`/discovery-request/${caseId}`)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Document
                       </Button>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
           </div>
 
           {/* Chat Sidebar */}
@@ -370,7 +651,7 @@ const AIChatPage = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setCurrentMessage("Summarize the key points from my uploaded documents")}
+                  onClick={() => setCurrentMessage("Summarize the key points from my case documents")}
                 >
                   Summarize Files
                 </Button>
@@ -393,6 +674,78 @@ const AIChatPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog 
+        open={!!documentToDelete} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setDocumentToDelete(null);
+            setDeleteConfirmText("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center">
+              <AlertTriangle className="h-5 w-5 mr-2" />
+              Delete Document
+            </DialogTitle>
+            <DialogDescription>
+              <p className="mb-2">
+                Are you <strong>absolutely sure</strong> you want to delete this document? 
+              </p>
+              <p className="mb-2 text-red-500">
+                This action <strong>cannot be undone</strong> and all document data will be permanently lost.
+              </p>
+              <p>
+                Type <strong>DELETE</strong> below to confirm:
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="my-2">
+            <Input 
+              placeholder="Type DELETE to confirm" 
+              className="border-red-200"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+            />
+          </div>
+          
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline" 
+              className="sm:flex-1"
+              onClick={() => {
+                setDocumentToDelete(null);
+                setDeleteConfirmText("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              className="sm:flex-1"
+              disabled={deleteConfirmText !== "DELETE"}
+              onClick={handleDeleteDocument}
+            >
+              Delete Document
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Document Viewer */}
+      <DocumentViewer
+        documentId={viewingDocumentId}
+        caseId={caseId}
+        open={showDocumentViewer}
+        onClose={() => {
+          setShowDocumentViewer(false);
+          setViewingDocumentId(null);
+        }}
+      />
     </DashboardLayout>
   );
 };
