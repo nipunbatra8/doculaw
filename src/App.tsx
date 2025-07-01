@@ -27,6 +27,7 @@ import ClientSignupPage from "./pages/auth/ClientSignupPage";
 import OnboardingPage from "./pages/common/OnboardingPage";
 import ClientLoginPage from "./pages/auth/ClientLoginPage";
 import ExpiredLinkPage from "./pages/auth/ExpiredLinkPage";
+import AIChatPage from "./pages/lawyer/AIChatPage";
 
 // Auth provider
 import { AuthProvider } from "./context/AuthContext";
@@ -115,6 +116,13 @@ const App = () => {
                   <ProtectedRoute>
                     <RouteGuard allowedUserTypes={['lawyer']}>
                       <CasePage />
+                    </RouteGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/ai-chat/:caseId" element={
+                  <ProtectedRoute>
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <AIChatPage />
                     </RouteGuard>
                   </ProtectedRoute>
                 } />
