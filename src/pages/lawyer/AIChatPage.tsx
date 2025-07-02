@@ -112,6 +112,9 @@ const AIChatPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Add at the top of the component, after state declarations
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   // Fetch case details
   const { data: caseData } = useQuery({
     queryKey: ['case', caseId],
@@ -490,146 +493,12 @@ const AIChatPage = () => {
                 Chat with AI about {caseData?.name || "your case"}
               </p>
             </div>
-            
-            <Badge variant="secondary" className="text-sm">
-              {uploadedFiles.length} files uploaded
-            </Badge>
           </div>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
-          {/* Main Content Area */}
-          <div className="flex-1 flex flex-col">
-            {/* File Upload Area */}
-            <div 
-              className={`m-6 mb-4 border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                isDragOver 
-                  ? 'border-blue-500 bg-blue-50' 
-                  : 'border-gray-300 hover:border-gray-400'
-              }`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Drop additional files here or click to upload
-              </h3>
-              <p className="text-gray-500 mb-4">
-                Upload additional documents, PDFs, text files, or any case-related materials for AI analysis
-              </p>
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                variant="outline"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Choose Files
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files) {
-                    handleFileUpload(Array.from(e.target.files));
-                  }
-                }}
-              />
-            </div>
-
-            {/* Case Documents Section */}
-            <div className="m-6 mb-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <FileText className="h-5 w-5 mr-2" />
-                    Case Documents
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {isLoadingDocuments ? (
-                    <div className="animate-pulse space-y-4">
-                      <div className="h-16 bg-gray-200 rounded"></div>
-                      <div className="h-16 bg-gray-200 rounded"></div>
-                    </div>
-                  ) : caseDocuments && caseDocuments.length > 0 ? (
-                    <div className="space-y-3">
-                      {caseDocuments.map((doc) => (
-                        <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                          <div className="flex items-center space-x-3">
-                            <FileText className="h-5 w-5 text-blue-500" />
-                            <div>
-                              <div className="flex items-center">
-                                <p className="text-sm font-medium text-gray-900">{doc.name}</p>
-                                {doc.fromStorage && (
-                                  <Badge variant="outline" className="ml-2 text-amber-600 bg-amber-50 text-xs">
-                                    Storage Only
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-500">
-                                {formatFileSize(doc.size)} • Uploaded: {format(parseISO(doc.created_at), 'MMM d, yyyy')}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleViewDocument(doc.id)}
-                              title="View Document"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => window.open(doc.url, '_blank')}
-                              title="Download Document"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setDocumentToDelete(doc.id)}
-                              title="Delete Document"
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-500 py-8">
-                      <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                      <p>No documents have been uploaded to this case yet.</p>
-                      <Button 
-                        variant="outline" 
-                        className="mt-4"
-                        onClick={() => navigate(`/discovery-request/${caseId}`)}
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Document
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-          </div>
-
-          {/* Chat Sidebar */}
-          <div className="w-96 border-l flex flex-col">
-            {/* Chat Header */}
-            <div className="p-4 border-b">
-              <h2 className="font-semibold text-gray-900">AI Assistant</h2>
-              <p className="text-sm text-gray-500">Ask questions about your files</p>
-            </div>
-
+        <div className="flex-1 flex flex-row overflow-hidden">
+          {/* Chat Area (70%) */}
+          <div className={`flex-[7] min-w-0 flex flex-col border-r transition-all duration-300` + (sidebarOpen ? '' : ' w-full') }>
             {/* Chat Messages */}
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
@@ -696,7 +565,6 @@ const AIChatPage = () => {
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
-              
               {/* Quick Actions */}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
@@ -723,6 +591,135 @@ const AIChatPage = () => {
               </div>
             </div>
           </div>
+
+          {/* Sidebar (30%) for File Upload and Documents, collapsible */}
+          {sidebarOpen ? (
+            <div className="flex-[3] min-w-[250px] max-w-[500px] flex flex-col bg-gray-50 transition-all duration-300 relative">
+              {/* Collapse button */}
+              <button
+                className="absolute top-2 right-2 z-10 bg-white border rounded-full p-1 shadow hover:bg-gray-100"
+                onClick={() => setSidebarOpen(false)}
+                title="Collapse sidebar"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              {/* File Upload Area */}
+              <div 
+                className={`m-4 border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                  isDragOver 
+                    ? 'border-blue-500 bg-blue-50' 
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <Upload className="mx-auto h-10 w-10 text-gray-400 mb-2" />
+                <h3 className="text-base font-medium text-gray-900 mb-1">
+                  Drop files or click to upload
+                </h3>
+                <p className="text-gray-500 mb-2 text-xs">
+                  Upload PDFs, text files, or any case-related materials for AI analysis
+                </p>
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="outline"
+                  size="sm"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Choose Files
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      handleFileUpload(Array.from(e.target.files));
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Case Documents Section */}
+              <div className="m-4 flex-1 overflow-y-auto">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <FileText className="h-5 w-5 mr-2" />
+                      Case Documents
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingDocuments ? (
+                      <div className="animate-pulse space-y-4">
+                        <div className="h-10 bg-gray-200 rounded"></div>
+                        <div className="h-10 bg-gray-200 rounded"></div>
+                      </div>
+                    ) : caseDocuments && caseDocuments.length > 0 ? (
+                      <div className="space-y-2">
+                        {caseDocuments.map((doc) => (
+                          <div key={doc.id} className="flex items-center justify-between p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                            <div className="flex items-center space-x-2">
+                              <FileText className="h-4 w-4 text-blue-500" />
+                              <div>
+                                <p className="text-xs font-medium text-gray-900">{doc.name}</p>
+                                <p className="text-[10px] text-gray-500">
+                                  {formatFileSize(doc.size)} • {format(parseISO(doc.created_at), 'MMM d, yyyy')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex space-x-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleViewDocument(doc.id)}
+                                title="View Document"
+                              >
+                                <FileText className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => window.open(doc.url, '_blank')}
+                                title="Download Document"
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setDocumentToDelete(doc.id)}
+                                title="Delete Document"
+                              >
+                                <Trash2 className="h-3 w-3 text-red-500" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-gray-500 py-4">
+                        <FileText className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                        <p className="text-xs">No documents uploaded yet.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col justify-center items-center w-8 bg-gray-50 border-l">
+              <button
+                className="m-2 bg-white border rounded-full p-1 shadow hover:bg-gray-100"
+                onClick={() => setSidebarOpen(true)}
+                title="Expand sidebar"
+              >
+                <ChevronLeft className="h-5 w-5 rotate-180" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
