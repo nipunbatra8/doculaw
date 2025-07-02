@@ -5,6 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
+import { 
+  addDocumentsToVectorStore, 
+  getAIResponseWithContext, 
+  deleteDocumentVectors 
+} from "@/integrations/openai/client";
 
 // UI Components
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -305,6 +310,23 @@ const AIChatPage = () => {
         
         if (insertError) throw insertError;
 
+        // Add to vector store for AI analysis
+        try {
+          const documentContent = extractedText || await file.text();
+          await addDocumentsToVectorStore(
+            [{
+              id: filePath, // Use filePath as document ID
+              name: file.name,
+              content: documentContent,
+              type: getFileType(file.name),
+            }],
+            caseId!,
+            user!.id
+          );
+        } catch (vectorError) {
+          console.error('Error adding to vector store:', vectorError);
+          // Don't fail the upload if vector store fails
+        }
         
         toast({
           title: "File Uploaded",
@@ -338,18 +360,39 @@ const AIChatPage = () => {
     setCurrentMessage('');
     setIsLoading(true);
 
-    // Simulate AI response (replace with actual AI integration)
-    setTimeout(() => {
-      const aiResponse: ChatMessage = {
+    try {
+      // Get AI response with context from vector store
+      const aiResponse = await getAIResponseWithContext(currentMessage, caseId!);
+      
+      const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content: `I understand you want to know about: "${currentMessage}". Based on the ${uploadedFiles.length} file(s) you've uploaded and the ${caseDocuments?.length || 0} case document(s), I can help you analyze the content, suggest edits, or create new documents. What specific task would you like me to help you with?`,
+        content: aiResponse,
         timestamp: new Date()
       };
       
-      setChatMessages(prev => [...prev, aiResponse]);
+      setChatMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      
+      // Fallback response if AI fails
+      const fallbackMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: `I apologize, but I'm having trouble accessing the case documents right now. Please try again later or contact support if the issue persists.`,
+        timestamp: new Date()
+      };
+      
+      setChatMessages(prev => [...prev, fallbackMessage]);
+      
+      toast({
+        title: "AI Error",
+        description: "Failed to get AI response. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const removeFile = (fileId: string) => {
@@ -396,6 +439,14 @@ const AIChatPage = () => {
           .eq('id', documentToDelete);
           
         if (deleteError) throw deleteError;
+        
+        // Delete from vector store
+        try {
+          await deleteDocumentVectors(docToDelete.path);
+        } catch (vectorError) {
+          console.error('Error deleting from vector store:', vectorError);
+          // Don't fail the deletion if vector store fails
+        }
       }
       
       toast({

@@ -30,7 +30,6 @@ const formSchema = z.object({
   lastName: z.string().min(2, { message: "Last name must be at least 2 characters" }),
   email: z.string().email({ message: "Please enter a valid email address" }),
   phone: z.string().min(1, { message: "Phone number is required for the invitation" }),
-  caseType: z.string().min(1, { message: "Preferred case type is required" }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -53,7 +52,6 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
       lastName: "",
       email: "",
       phone: "",
-      caseType: "",
     },
   });
 
@@ -98,7 +96,6 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
           last_name: data.lastName,
           email: data.email,
           phone: data.phone || null,
-          case_type: data.caseType, // Store the case type preference, but don't create a case
           status: 'pending'
         })
         .select()
@@ -259,36 +256,6 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
                   <FormMessage />
                   <p className="text-xs text-gray-500 mt-1">
                     Required for sending the invitation via SMS.
-                  </p>
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="caseType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Preferred Case Type</FormLabel>
-                  <FormControl>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      {...field}
-                    >
-                      <option value="">Select Case Type</option>
-                      <option value="Personal Injury">Personal Injury</option>
-                      <option value="Family Law">Family Law</option>
-                      <option value="Criminal Defense">Criminal Defense</option>
-                      <option value="Estate Planning">Estate Planning</option>
-                      <option value="Business Dispute">Business Dispute</option>
-                      <option value="Civil Rights">Civil Rights</option>
-                      <option value="Immigration">Immigration</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </FormControl>
-                  <FormMessage />
-                  <p className="text-xs text-gray-500 mt-1">
-                    This only indicates the client's matter type. You'll need to create cases separately.
                   </p>
                 </FormItem>
               )}
