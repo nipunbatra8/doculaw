@@ -1,0 +1,10 @@
+{
+  "name": "vector-store",
+  "version": "1.0.0",
+  "description": "Vector store operations for AI Chat",
+  "main": "index.ts",
+  "dependencies": {
+    "openai": "^4.0.0",
+    "@pinecone-database/pinecone": "^1.0.0"
+  }
+} 

@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Briefcase, Users, Settings, Archive, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import { Briefcase, Users, Settings, Archive, LayoutDashboard, LogOut, Menu, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -17,6 +17,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { toast } = useToast();
   
   // Get user metadata
@@ -67,18 +68,25 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Sidebar */}
       <div 
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 transform bg-white shadow-lg transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto lg:block",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed inset-y-0 left-0 z-50 bg-white shadow-lg transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto lg:block flex flex-col",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          sidebarCollapsed ? "w-16" : "w-64"
         )}
       >
-        <div className="flex flex-col h-full">
-          {/* Sidebar header */}
-          <div className="flex items-center justify-center p-4 border-b border-gray-200">
-            <img src="/lovable-uploads/0be20ac4-7ddb-481d-a2f7-35e04e74334b.png" alt="DocuLaw Logo" className="h-8 w-auto" />
-            <span className="ml-2 font-bold text-doculaw-800 text-xl">DocuLaw</span>
-          </div>
-
-          {/* User info */}
+        {/* Sidebar header (logo and collapse button) */}
+        <div className={cn("flex items-center border-b border-gray-200 p-4", sidebarCollapsed ? "justify-center flex-col gap-2" : "justify-between")}> 
+          <img src="/lovable-uploads/0be20ac4-7ddb-481d-a2f7-35e04e74334b.png" alt="DocuLaw Logo" className={cn("h-8 w-auto", sidebarCollapsed ? "mx-auto" : "")} />
+          {!sidebarCollapsed && <span className="ml-2 font-bold text-doculaw-800 text-xl">DocuLaw</span>}
+          <button
+            className="ml-auto hidden lg:block p-1 rounded hover:bg-gray-100"
+            onClick={() => setSidebarCollapsed((c) => !c)}
+            aria-label="Collapse sidebar"
+          >
+            {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+          </button>
+        </div>
+        {/* User info (hide when collapsed) */}
+        {!sidebarCollapsed && (
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center space-x-3">
               <Avatar>
@@ -93,30 +101,31 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               </div>
             </div>
           </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto p-4">
-            <ul className="space-y-1">
-              {navigation.map((item) => (
-                <li key={item.name}>
-                  <Link
-                    to={item.path}
-                    className={cn(
-                      "flex items-center px-4 py-3 text-sm font-medium rounded-lg",
-                      location.pathname === item.path
-                        ? "bg-doculaw-100 text-doculaw-700"
-                        : "text-gray-700 hover:bg-gray-100"
-                    )}
-                  >
-                    <item.icon className="mr-3 h-5 w-5" />
-                    {item.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          {/* Logout button */}
+        )}
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto p-4">
+          <ul className="space-y-1">
+            {navigation.map((item) => (
+              <li key={item.name}>
+                <Link
+                  to={item.path}
+                  className={cn(
+                    "flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200",
+                    location.pathname === item.path
+                      ? "bg-doculaw-100 text-doculaw-700"
+                      : "text-gray-700 hover:bg-gray-100",
+                    sidebarCollapsed ? "justify-center px-0" : ""
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {!sidebarCollapsed && <span className="ml-3">{item.name}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        {/* Logout button (hide when collapsed) */}
+        {!sidebarCollapsed && (
           <div className="p-4 border-t border-gray-200">
             <Button 
               variant="ghost" 
@@ -127,7 +136,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               Sign Out
             </Button>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Main content */}
