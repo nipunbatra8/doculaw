@@ -11,6 +11,10 @@ import {
   deleteDocumentVectors 
 } from "@/integrations/openai/client";
 
+// Form Interrogatories Integration
+import { ComplaintInformation } from "@/integrations/gemini/client";
+import FormInterrogatoriesPdfButton from "@/components/discovery/FormInterrogatoriesPdfButton";
+
 // UI Components
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -41,7 +45,8 @@ import {
   Download,
   Edit3,
   Plus,
-  AlertTriangle
+  AlertTriangle,
+  FileCheck
 } from "lucide-react";
 
 // Components
@@ -92,7 +97,7 @@ const AIChatPage = () => {
     {
       id: '1',
       type: 'ai',
-      content: 'Hello! I\'m your AI assistant. You can upload files by dragging and dropping them, then ask me questions about them. I can help you analyze documents, edit content, or create new files based on your case materials.',
+      content: 'Hello! I\'m your AI assistant. You can upload files by dragging and dropping them, then ask me questions about them. I can help you analyze documents, edit content, or create new files based on your case materials.\n\n💡 **New Feature**: You can now generate Form Interrogatories (DISC-001) directly from the sidebar or use the "Generate Form Interrogatories" button in the quick actions below. The AI will analyze your case documents to determine which sections apply.',
       timestamp: new Date()
     }
   ]);
@@ -107,6 +112,10 @@ const AIChatPage = () => {
   // Document deletion state
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState<string>("");
+  
+  // Form Interrogatories state
+  const [showFormInterrogatories, setShowFormInterrogatories] = useState<boolean>(false);
+  const [extractedComplaintData, setExtractedComplaintData] = useState<ComplaintInformation | null>(null);
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -249,6 +258,20 @@ const AIChatPage = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + F to open Form Interrogatories
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setShowFormInterrogatories(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Handle file drag and drop
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -375,6 +398,24 @@ const AIChatPage = () => {
       };
       
       setChatMessages(prev => [...prev, aiMessage]);
+      
+      // Check if the AI response mentions Form Interrogatories and suggest the feature
+      if (aiResponse.toLowerCase().includes('form interrogatories') || 
+          aiResponse.toLowerCase().includes('discovery') ||
+          currentMessage.toLowerCase().includes('form interrogatories') ||
+          currentMessage.toLowerCase().includes('discovery')) {
+        
+        // Add a follow-up message suggesting the Form Interrogatories feature
+        setTimeout(() => {
+          const suggestionMessage: ChatMessage = {
+            id: (Date.now() + 2).toString(),
+            type: 'ai',
+            content: '💡 **Quick Tip**: You can generate official Form Interrogatories (DISC-001) with AI-powered case analysis using the "Generate Form Interrogatories" button in the sidebar or quick actions below.',
+            timestamp: new Date()
+          };
+          setChatMessages(prev => [...prev, suggestionMessage]);
+        }, 1000);
+      }
     } catch (error) {
       console.error('Error getting AI response:', error);
       
@@ -469,6 +510,10 @@ const AIChatPage = () => {
         variant: "destructive"
       });
     }
+  };
+
+  const handleGenerateFormInterrogatories = () => {
+    setShowFormInterrogatories(true);
   };
 
   return (
@@ -587,6 +632,14 @@ const AIChatPage = () => {
                   onClick={() => setCurrentMessage("Find inconsistencies in the uploaded documents")}
                 >
                   Find Issues
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleGenerateFormInterrogatories}
+                >
+                  <FileCheck className="h-3 w-3 mr-1" />
+                  Generate Form Interrogatories
                 </Button>
               </div>
             </div>
@@ -707,6 +760,42 @@ const AIChatPage = () => {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Form Interrogatories Section */}
+                <Card className="mt-4">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <FileCheck className="h-5 w-5 mr-2" />
+                      Discovery Documents
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h4 className="text-sm font-medium text-blue-900 mb-1">Form Interrogatories</h4>
+                        <p className="text-xs text-blue-700 mb-3">
+                          Generate official Form Interrogatories (DISC-001) with AI-powered case analysis.
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                          onClick={handleGenerateFormInterrogatories}
+                        >
+                          <FileCheck className="h-3 w-3 mr-1" />
+                          Generate & Preview
+                        </Button>
+                        <p className="text-[10px] text-blue-600 mt-2 text-center">
+                          💡 Press Ctrl+F to open quickly
+                        </p>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500 text-center">
+                        <p>More discovery document types coming soon...</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           ) : (
@@ -794,6 +883,48 @@ const AIChatPage = () => {
           setViewingDocumentId(null);
         }}
       />
+
+      {/* Form Interrogatories Dialog */}
+      <Dialog 
+        open={showFormInterrogatories} 
+        onOpenChange={setShowFormInterrogatories}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <FileCheck className="h-5 w-5 mr-2" />
+              Generate Form Interrogatories
+            </DialogTitle>
+            <DialogDescription>
+              Generate and preview Form Interrogatories (DISC-001) for your case. 
+              The AI will analyze your case documents to determine which sections apply.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-6">
+            <FormInterrogatoriesPdfButton
+              extractedData={extractedComplaintData}
+              caseId={caseId}
+              onEditExtractedData={() => {
+                // TODO: Add edit functionality if needed
+                toast({
+                  title: "Edit Feature",
+                  description: "Edit functionality will be available in a future update.",
+                });
+              }}
+            />
+          </div>
+          
+          <DialogFooter className="mt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowFormInterrogatories(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
