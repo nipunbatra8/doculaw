@@ -175,10 +175,12 @@ const styles = StyleSheet.create({
 // Component for generating the RFA PDF document
 const RFAPdfDocument = ({ 
   extractedData, 
-  vectorBasedAdmissions 
+  vectorBasedAdmissions, 
+  vectorBasedDefinitions 
 }: { 
   extractedData: ComplaintInformation;
   vectorBasedAdmissions?: string[];
+  vectorBasedDefinitions?: string[];
 }) => {
   // Generate line numbers for the document (1-28 for first page)
   const generateLineNumbers = (count: number) => {
@@ -196,11 +198,19 @@ const RFAPdfDocument = ({
     if (vectorBasedAdmissions && vectorBasedAdmissions.length > 0) {
       return vectorBasedAdmissions;
     }
-
-    console.log('No vector-based admissions found, generating default admissions');
     
     // Fallback to default admissions
     return generateDefaultAdmissions();
+  };
+
+  // Use vector-based definitions if available, otherwise fall back to generated definitions
+  const getDefinitions = (): string[] => {
+    if (vectorBasedDefinitions && vectorBasedDefinitions.length > 0) {
+      return vectorBasedDefinitions;
+    }
+    
+    // Fallback to default definitions
+    return generateDefaultDefinitions();
   };
 
   // Generate default admissions for fallback
@@ -259,6 +269,32 @@ const RFAPdfDocument = ({
     
     // Combine common and case-specific admissions
     return [...commonAdmissions, ...caseSpecificAdmissions];
+  };
+
+  // Generate default definitions for fallback
+  const generateDefaultDefinitions = (): string[] => {
+    const caseType = extractedData.caseType || 'civil';
+    const defendant = extractedData.defendant || 'the defendant';
+    
+    if (caseType.toLowerCase().includes('contract')) {
+      return [
+        `1. The term "INCIDENT" refers to the breach of contract alleged in the complaint.`,
+        `2. The term "YOU" refers to the responding party, ${defendant}.`,
+        `3. The term "CONTRACT" refers to the agreement between the parties as described in the complaint.`
+      ];
+    } else if (caseType.toLowerCase().includes('injury') || caseType.toLowerCase().includes('accident')) {
+      return [
+        `1. The term "INCIDENT" refers to the accident described in the complaint occurring on or about ${extractedData.filingDate || 'the date specified in the complaint'}.`,
+        `2. The term "YOU" refers to the responding party, ${defendant}.`,
+        `3. The term "PLAINTIFF" refers to ${extractedData.plaintiff || 'the plaintiff'}.`
+      ];
+    } else {
+      return [
+        `1. The term "INCIDENT" refers to the events described in the complaint.`,
+        `2. The term "YOU" refers to the responding party, ${defendant}.`,
+        `3. The term "PLAINTIFF" refers to ${extractedData.plaintiff || 'the plaintiff'}.`
+      ];
+    }
   };
 
   // Get attorney information from extracted data
@@ -429,7 +465,20 @@ const RFAPdfDocument = ({
         
         {/* Admissions Content */}
         <View style={{ marginTop: 20 }}>
-          <Text style={styles.headerLeft}><Text style={styles.bold}>ADMISSIONS:</Text></Text>
+          {/* Definitions Section */}
+          <Text style={styles.headerLeft}><Text style={styles.bold}>DEFINITIONS</Text></Text>
+          <Text style={{ marginTop: 10 }}></Text>
+          
+          {getDefinitions().map((definition, index) => (
+            <View key={index} style={{ marginBottom: 15 }}>
+              <Text>{definition}</Text>
+            </View>
+          ))}
+          
+          <Text style={{ marginTop: 20 }}></Text>
+          
+          {/* Admissions Section */}
+          <Text style={styles.headerLeft}><Text style={styles.bold}>YOU ARE REQUESTED TO ADMIT THAT:</Text></Text>
           <Text style={{ marginTop: 10 }}></Text>
           
           {getAdmissions().map((admission, index) => (
@@ -476,13 +525,20 @@ const RequestForAdmissionsPdfButton = ({
   const [showPreview, setShowPreview] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [vectorBasedAdmissions, setVectorBasedAdmissions] = useState<string[]>([]);
+  const [vectorBasedDefinitions, setVectorBasedDefinitions] = useState<string[]>([]);
   const [editedAdmissions, setEditedAdmissions] = useState<string[]>([]);
+  const [editedDefinitions, setEditedDefinitions] = useState<string[]>([]);
   const totalPages = 2;
   const { toast } = useToast();
 
   // Handle admission changes from the preview component
   const handleAdmissionsChange = (admissions: string[]) => {
     setEditedAdmissions(admissions);
+  };
+
+  // Handle definition changes from the preview component
+  const handleDefinitionsChange = (definitions: string[]) => {
+    setEditedDefinitions(definitions);
   };
 
   // Get the admissions to use - edited ones take priority
@@ -493,10 +549,21 @@ const RequestForAdmissionsPdfButton = ({
     return vectorBasedAdmissions;
   };
 
+  // Get the definitions to use - edited ones take priority
+  const getDefinitionsForPdf = (): string[] => {
+    if (editedDefinitions.length > 0) {
+      return editedDefinitions;
+    }
+    return vectorBasedDefinitions;
+  };
+
   /**
    * Generate admissions based on complaint vectors stored in the vector store
    */
-  const generateAdmissionsFromVectors = async (): Promise<string[]> => {
+  const generateAdmissionsFromVectors = async (): Promise<{
+    definitions: string[];
+    admissions: string[];
+  }> => {
     if (!caseId) {
       throw new Error('Case ID is required to search complaint vectors');
     }
@@ -527,21 +594,32 @@ const RequestForAdmissionsPdfButton = ({
         .join('\n\n');
 
       // Use AI to generate specific admissions based on the complaint content
-      const aiPrompt = `Based on the following content from a legal complaint, generate 10-15 specific Request for Admissions statements. These should be factual statements that directly relate to the allegations and circumstances described in the complaint.
+      const aiPrompt = `Based on the following content from a legal complaint, generate a Request for Admissions document with proper legal formatting.
 
-Each admission should:
-1. Be specific to the facts in this case
-2. Use proper legal language
-3. Begin with "Admit that..."
-4. Be answerable with admit/deny/insufficient information
-5. Focus on key elements needed to prove the case
+INSTRUCTIONS:
+1. Create only 2-3 essential DEFINITIONS that are actually needed for clarity
+2. Keep definitions concise and specific
+3. Generate 10-15 admissions that use these definitions where appropriate
+4. Use proper legal formatting and terminology
 
-IMPORTANT: Format each admission exactly as shown in the examples below, with each admission on a separate line starting with "Admit that":
+REQUIRED FORMAT:
 
-Example format:
-Admit that you entered into a contract with plaintiff on January 1, 2023.
-Admit that you failed to perform your obligations under the contract.
-Admit that you received written notice of default from plaintiff.
+DEFINITIONS
+1. The term "INCIDENT" refers to [brief description of main event].
+2. The term "YOU" refers to [defendant name].
+[Only add a 3rd definition if truly necessary for case clarity]
+
+YOU ARE REQUESTED TO ADMIT THAT:
+1. [Admission using defined terms where appropriate]
+2. [Another admission]
+3. [Continue with numbered admissions]
+
+Guidelines:
+- Only define terms that will be used multiple times in admissions
+- Keep definitions under 20 words when possible
+- Admissions should be clear and specific to the case facts
+- Use defined terms naturally in admissions
+- Each admission should be answerable with admit/deny/insufficient information
 
 Complaint content:
 ${uniqueContent}
@@ -552,90 +630,93 @@ Case information:
 - Case Type: ${extractedData?.caseType || 'Unknown'}
 - Filing Date: ${extractedData?.filingDate || 'Unknown'}
 
-Generate 10-15 admissions in the exact format shown above, each starting with "Admit that" and ending with a period:`;
+Generate the complete document with minimal essential definitions and numbered admissions:`;
 
       const aiResponse = await getAIResponseWithContext(aiPrompt, caseId, 10);
       
       // Debug: Log the AI response to understand the format
       console.log('AI Response for admissions:', aiResponse);
       
-      // Parse the AI response to extract individual admissions
-      // Try multiple parsing strategies to be more robust
-      let admissions: string[] = [];
+      // Parse the AI response to extract definitions and admissions
+      const lines = aiResponse.split('\n').map(line => line.trim()).filter(line => line.length > 0);
       
-      // Strategy 1: Look for lines starting with "Admit that"
-      admissions = aiResponse
-        .split('\n')
-        .filter(line => line.trim().startsWith('Admit that'))
-        .map(line => line.trim())
-        .slice(0, 15);
+      const definitions: string[] = [];
+      const admissions: string[] = [];
+      let currentSection = '';
       
-      // Strategy 2: If no "Admit that" found, look for numbered items and convert them
-      if (admissions.length === 0) {
-        console.log('No "Admit that" lines found, trying numbered format...');
-        const numberedLines = aiResponse
-          .split('\n')
-          .filter(line => {
-            const trimmed = line.trim();
-            return /^\d+[.)]/.test(trimmed) && trimmed.length > 10; // Numbered lines with substantial content
-          })
-          .map(line => {
-            let content = line.trim();
-            // Remove number prefix (e.g., "1. " or "1)")
-            content = content.replace(/^\d+[.)]\s*/, '');
-            // Ensure it starts with "Admit that"
-            if (!content.toLowerCase().startsWith('admit that')) {
-              content = 'Admit that ' + content;
-            }
-            return content;
-          })
-          .slice(0, 15);
+      for (const line of lines) {
+        if (line.toUpperCase().includes('DEFINITIONS')) {
+          currentSection = 'definitions';
+          continue;
+        } else if (line.toUpperCase().includes('YOU ARE REQUESTED TO ADMIT')) {
+          currentSection = 'admissions';
+          continue;
+        }
         
-        admissions = numberedLines;
+        if (currentSection === 'definitions') {
+          // Extract definitions (lines starting with numbers)
+          if (/^\d+\./.test(line)) {
+            definitions.push(line);
+          }
+        } else if (currentSection === 'admissions') {
+          // Extract admissions (lines starting with numbers) and remove the number prefix
+          if (/^\d+\./.test(line)) {
+            // Remove the number prefix to avoid double numbering
+            const admissionText = line.replace(/^\d+\.\s*/, '');
+            admissions.push(admissionText);
+          }
+        }
       }
       
-      // Strategy 3: If still no admissions, look for any substantial lines and convert them
-      if (admissions.length === 0) {
-        console.log('No numbered lines found, trying general parsing...');
-        const generalLines = aiResponse
-          .split('\n')
-          .filter(line => {
-            const trimmed = line.trim();
-            return trimmed.length > 20 && // Substantial content
-                   !trimmed.toLowerCase().includes('request for admissions') && // Not headers
-                   !trimmed.toLowerCase().includes('based on') && // Not explanatory text
-                   !trimmed.toLowerCase().includes('following') && // Not intro text
-                   (trimmed.includes('defendant') || trimmed.includes('plaintiff')); // Likely admission content
-          })
-          .map(line => {
-            let content = line.trim();
-            // Clean up any prefixes
-            content = content.replace(/^[-*•]\s*/, ''); // Remove bullet points
-            content = content.replace(/^\d+[.)]\s*/, ''); // Remove numbers
-            // Ensure it starts with "Admit that"
-            if (!content.toLowerCase().startsWith('admit that')) {
-              content = 'Admit that ' + content;
-            }
-            return content;
-          })
-          .slice(0, 15);
-        
-        admissions = generalLines;
-      }
-      
-      console.log(`Extracted ${admissions.length} admissions:`, admissions);
+      console.log(`Extracted ${definitions.length} definitions and ${admissions.length} admissions`);
+      console.log('Definitions:', definitions);
+      console.log('Admissions:', admissions);
 
-      if (admissions.length === 0) {
-        // Fallback to default admissions if AI parsing fails
-        console.warn('No admissions extracted from AI response, using fallback');
-        return generateDefaultAdmissions(uniqueContent);
+      if (definitions.length === 0 || admissions.length === 0) {
+        // Fallback to default format if parsing fails
+        console.warn('Failed to parse structured response, using fallback');
+        return {
+          definitions: generateDefaultDefinitions(),
+          admissions: generateDefaultAdmissions(uniqueContent)
+        };
       }
 
-      return admissions;
+      return {
+        definitions,
+        admissions
+      };
     } catch (error) {
       console.error('Error generating admissions from vectors:', error);
       // Fallback to default admissions
-      return generateDefaultAdmissions();
+      return {
+        definitions: generateDefaultDefinitions(),
+        admissions: generateDefaultAdmissions()
+      };
+    }
+  };
+
+  /**
+   * Generate default definitions when vector search fails
+   */
+  const generateDefaultDefinitions = (): string[] => {
+    const caseType = extractedData?.caseType || 'civil';
+    const defendant = extractedData?.defendant?.split(',')[0] || 'the defendant';
+    
+    if (caseType.toLowerCase().includes('contract')) {
+      return [
+        `1. The term "INCIDENT" refers to the breach of contract alleged in the complaint.`,
+        `2. The term "YOU" refers to ${defendant}.`
+      ];
+    } else if (caseType.toLowerCase().includes('injury') || caseType.toLowerCase().includes('accident')) {
+      return [
+        `1. The term "INCIDENT" refers to the accident on ${extractedData?.filingDate || 'the date in the complaint'}.`,
+        `2. The term "YOU" refers to ${defendant}.`
+      ];
+    } else {
+      return [
+        `1. The term "INCIDENT" refers to the events described in the complaint.`,
+        `2. The term "YOU" refers to ${defendant}.`
+      ];
     }
   };
 
@@ -650,19 +731,18 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
     
     // Default admissions that apply to most cases
     const commonAdmissions = [
-      `Admit that the venue is proper in ${extractedData?.courtName || 'this court'}.`,
-      `Admit that the court has jurisdiction over this matter.`,
-      `Admit that you were properly served with the summons and complaint in this action.`,
-      `Admit that you received the complaint filed in this action on or about ${filingDate}.`
+      `YOU are the party named as defendant in this action.`,
+      `The venue is proper in ${extractedData?.courtName || 'this court'}.`,
+      `This court has jurisdiction over this matter.`,
+      `YOU were properly served with the summons and complaint in this action.`
     ];
     
     // Add content-specific admissions if complaint content is available
     if (complaintContent) {
       const contentAdmissions = [
-        `Admit that the facts alleged in the complaint are true.`,
-        `Admit that you were involved in the events described in the complaint.`,
-        `Admit that you have knowledge of the circumstances described in the complaint.`,
-        `Admit that you have documents related to the matters described in the complaint.`
+        `YOU were involved in the INCIDENT described in the complaint.`,
+        `YOU have knowledge of the circumstances described in the complaint.`,
+        `YOU have documents related to the matters described in the complaint.`
       ];
       return [...commonAdmissions, ...contentAdmissions];
     }
@@ -673,27 +753,24 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
     if (caseType.toLowerCase().includes('contract') || 
         extractedData?.chargeDescription?.toLowerCase().includes('contract')) {
       caseSpecificAdmissions = [
-        `Admit that you entered into a contract with ${plaintiff} on or about ${filingDate}.`,
-        `Admit that the terms of the contract required you to pay ${plaintiff} for services rendered.`,
-        `Admit that you failed to pay ${plaintiff} pursuant to the terms of the contract.`,
-        `Admit that you breached the contract by failing to perform your obligations.`,
-        `Admit that ${plaintiff} performed all obligations required under the contract.`
+        `YOU entered into a contract with ${plaintiff} on or about ${filingDate}.`,
+        `YOU failed to pay ${plaintiff} pursuant to the terms of the contract.`,
+        `YOU breached the contract by failing to perform YOUR obligations.`,
+        `${plaintiff} performed all obligations required under the contract.`
       ];
     } else if (caseType.toLowerCase().includes('injury') || 
                extractedData?.chargeDescription?.toLowerCase().includes('injury')) {
       caseSpecificAdmissions = [
-        `Admit that you were involved in an incident with ${plaintiff} on or about ${filingDate}.`,
-        `Admit that the incident was caused by your negligence.`,
-        `Admit that ${plaintiff} was injured as a result of the incident.`,
-        `Admit that ${plaintiff} incurred medical expenses as a result of injuries sustained.`,
-        `Admit that you had a duty of care toward ${plaintiff}.`
+        `YOU were involved in the INCIDENT with ${plaintiff} on or about ${filingDate}.`,
+        `The INCIDENT was caused by YOUR negligence.`,
+        `${plaintiff} was injured as a result of the INCIDENT.`,
+        `YOU had a duty of care toward ${plaintiff}.`
       ];
     } else {
       caseSpecificAdmissions = [
-        `Admit that you are the party named as defendant in this action.`,
-        `Admit that you have personal knowledge of the events described in the complaint.`,
-        `Admit that you have the capacity to respond to these requests for admissions.`,
-        `Admit that you understand the nature of the claims against you.`
+        `YOU have personal knowledge of the events described in the complaint.`,
+        `YOU have the capacity to respond to these requests for admissions.`,
+        `YOU understand the nature of the claims against YOU.`
       ];
     }
     
@@ -721,15 +798,16 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
       });
       
       // Generate admissions based on complaint vectors
-      const generatedAdmissions = await generateAdmissionsFromVectors();
-      setVectorBasedAdmissions(generatedAdmissions);
+      const { definitions, admissions } = await generateAdmissionsFromVectors();
+      setVectorBasedAdmissions(admissions);
+      setVectorBasedDefinitions(definitions);
       
       // Mark as generated
       setIsGenerated(true);
       
       toast({
         title: 'Document Generation Complete',
-        description: `Generated ${generatedAdmissions.length} specific admissions based on your complaint.`,
+        description: `Generated ${admissions.length} specific admissions based on your complaint.`,
       });
     } catch (error) {
       console.error('Error generating form:', error);
@@ -889,7 +967,9 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
           <RequestForAdmissionsPreview 
             extractedData={extractedData} 
             vectorBasedAdmissions={vectorBasedAdmissions} 
+            vectorBasedDefinitions={vectorBasedDefinitions}
             onAdmissionsChange={handleAdmissionsChange}
+            onDefinitionsChange={handleDefinitionsChange}
           />
           
           <div className="px-4 py-3 border-t bg-muted/20 flex justify-end gap-2">
@@ -903,7 +983,7 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
             </Button>
             
             <PDFDownloadLink 
-              document={<RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={getAdmissionsForPdf()} />} 
+              document={<RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={getAdmissionsForPdf()} vectorBasedDefinitions={getDefinitionsForPdf()} />} 
               fileName={`Request_for_Admissions_${extractedData.case?.caseNumber || ''}.pdf`}
               style={{ textDecoration: 'none' }}
             >
@@ -980,7 +1060,7 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
           
           <div className="flex-1 overflow-hidden mt-4">
             <PDFViewer width="100%" height="100%" className="border rounded">
-              <RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={getAdmissionsForPdf()} />
+              <RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={getAdmissionsForPdf()} vectorBasedDefinitions={getDefinitionsForPdf()} />
             </PDFViewer>
           </div>
           
@@ -1001,7 +1081,7 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
             
             <div className="flex gap-2">
               <PDFDownloadLink 
-                document={<RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={getAdmissionsForPdf()} />} 
+                document={<RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={getAdmissionsForPdf()} vectorBasedDefinitions={getDefinitionsForPdf()} />} 
                 fileName={`Request_for_Admissions_${extractedData.case?.caseNumber || ''}.pdf`}
                 className="inline-flex"
               >

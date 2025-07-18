@@ -8,45 +8,71 @@ import { Textarea } from "@/components/ui/textarea";
 interface RequestForAdmissionsPreviewProps {
   extractedData: ComplaintInformation;
   vectorBasedAdmissions?: string[];
+  vectorBasedDefinitions?: string[];
   onAdmissionsChange?: (admissions: string[]) => void;
+  onDefinitionsChange?: (definitions: string[]) => void;
 }
 
-const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions, onAdmissionsChange }: RequestForAdmissionsPreviewProps) => {
+const RequestForAdmissionsPreview = ({ 
+  extractedData, 
+  vectorBasedAdmissions, 
+  vectorBasedDefinitions,
+  onAdmissionsChange,
+  onDefinitionsChange 
+}: RequestForAdmissionsPreviewProps) => {
   // Default example admissions (fallback)
   const defaultAdmissions = [
-    `Admit that you are a party to the contract dated ${extractedData.filingDate || 'the date specified in the complaint'}.`,
-    `Admit that you failed to perform under the terms of the contract as alleged in the complaint.`,
-    `Admit that you owe the plaintiff damages as a result of your breach of contract.`,
-    `Admit that the venue is proper in this court.`,
-    `Admit that the court has jurisdiction over this matter.`,
-    `Admit that you received a demand letter from the plaintiff prior to this lawsuit.`
+    `YOU are the party named as defendant in this action.`,
+    `The venue is proper in ${extractedData.courtName || 'this court'}.`,
+    `This court has jurisdiction over this matter.`,
+    `YOU were properly served with the summons and complaint in this action.`,
+    `YOU were involved in the INCIDENT described in the complaint.`,
+    `YOU have knowledge of the circumstances described in the complaint.`
   ];
 
-  // Use vector-based admissions if available, otherwise fall back to default
+  // Default example definitions (fallback)
+  const defaultDefinitions = [
+    `1. The term "INCIDENT" refers to the events described in the complaint.`,
+    `2. The term "YOU" refers to ${extractedData.defendant?.split(',')[0] || 'the defendant'}.`
+  ];
+
+  // Use vector-based content if available, otherwise fall back to default
   const initialAdmissions = vectorBasedAdmissions && vectorBasedAdmissions.length > 0 
     ? vectorBasedAdmissions 
     : defaultAdmissions;
 
+  const initialDefinitions = vectorBasedDefinitions && vectorBasedDefinitions.length > 0 
+    ? vectorBasedDefinitions 
+    : defaultDefinitions;
+
   const [isEditing, setIsEditing] = useState(false);
   const [editableAdmissions, setEditableAdmissions] = useState<string[]>(initialAdmissions);
+  const [editableDefinitions, setEditableDefinitions] = useState<string[]>(initialDefinitions);
   const [tempAdmissions, setTempAdmissions] = useState<string[]>(initialAdmissions);
+  const [tempDefinitions, setTempDefinitions] = useState<string[]>(initialDefinitions);
 
   const handleEditClick = () => {
     setTempAdmissions([...editableAdmissions]);
+    setTempDefinitions([...editableDefinitions]);
     setIsEditing(true);
   };
 
   const handleSaveClick = () => {
     setEditableAdmissions([...tempAdmissions]);
+    setEditableDefinitions([...tempDefinitions]);
     setIsEditing(false);
     // Notify parent component of changes
     if (onAdmissionsChange) {
       onAdmissionsChange(tempAdmissions);
     }
+    if (onDefinitionsChange) {
+      onDefinitionsChange(tempDefinitions);
+    }
   };
 
   const handleCancelClick = () => {
     setTempAdmissions([...editableAdmissions]);
+    setTempDefinitions([...editableDefinitions]);
     setIsEditing(false);
   };
 
@@ -54,6 +80,12 @@ const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions, onA
     const updated = [...tempAdmissions];
     updated[index] = value;
     setTempAdmissions(updated);
+  };
+
+  const handleDefinitionChange = (index: number, value: string) => {
+    const updated = [...tempDefinitions];
+    updated[index] = value;
+    setTempDefinitions(updated);
   };
 
   const handleAddAdmission = () => {
@@ -65,11 +97,22 @@ const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions, onA
     setTempAdmissions(updated);
   };
 
+  const handleAddDefinition = () => {
+    setTempDefinitions([...tempDefinitions, '']);
+  };
+
+  const handleRemoveDefinition = (index: number) => {
+    const updated = tempDefinitions.filter((_, i) => i !== index);
+    setTempDefinitions(updated);
+  };
+
   const handleResetToOriginal = () => {
     setTempAdmissions([...initialAdmissions]);
+    setTempDefinitions([...initialDefinitions]);
   };
 
   const admissionsToDisplay = isEditing ? tempAdmissions : editableAdmissions;
+  const definitionsToDisplay = isEditing ? tempDefinitions : editableDefinitions;
 
   return (
     <div className="p-4 text-sm">
@@ -166,40 +209,70 @@ const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions, onA
                 )}
               </div>
             </div>
-            <p className="mb-4">
-              <span className="font-medium">{extractedData.formParties?.askingParty || extractedData.plaintiff || 'Plaintiff'}</span> 
-              &nbsp;requests that&nbsp;
-              <span className="font-medium">{extractedData.formParties?.answeringParty || extractedData.defendant || 'Defendant'}</span>
-              &nbsp;admit the truth of the following matters:
-            </p>
-            
-            <div className="space-y-3 pl-3">
-              {admissionsToDisplay.map((admission, index) => (
-                <div key={index} className="flex gap-2">
-                  <span className="font-medium">{index + 1}.</span>
-                  {isEditing ? (
-                    <>
-                      <Textarea
-                        className="flex-1 min-h-[60px]"
-                        value={admission}
-                        onChange={(e) => handleAdmissionChange(index, e.target.value)}
-                        placeholder="Admit that..."
-                      />
-                      <Button variant="ghost" size="sm" onClick={() => handleRemoveAdmission(index)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </>
-                  ) : (
-                    <p className="flex-1">{admission}</p>
-                  )}
-                </div>
-              ))}
-              {isEditing && (
-                <Button variant="outline" size="sm" onClick={handleAddAdmission} className="ml-6">
-                  Add Admission
-                </Button>
-              )}
+
+            {/* Definitions Section */}
+            <div className="mb-6">
+              <h5 className="font-medium mb-3">DEFINITIONS</h5>
+              <div className="space-y-3 pl-3">
+                {definitionsToDisplay.map((definition, index) => (
+                  <div key={index} className="flex gap-2">
+                    {isEditing ? (
+                      <>
+                        <Textarea
+                          className="flex-1 min-h-[60px]"
+                          value={definition}
+                          onChange={(e) => handleDefinitionChange(index, e.target.value)}
+                          placeholder="Definition..."
+                        />
+                        <Button variant="ghost" size="sm" onClick={() => handleRemoveDefinition(index)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="flex-1">{definition}</p>
+                    )}
+                  </div>
+                ))}
+                {isEditing && (
+                  <Button variant="outline" size="sm" onClick={handleAddDefinition} className="ml-6">
+                    Add Definition
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {/* Admissions Section */}
+            <div>
+              <h5 className="font-medium mb-3">YOU ARE REQUESTED TO ADMIT THAT:</h5>
+              <div className="space-y-3 pl-3">
+                {admissionsToDisplay.map((admission, index) => (
+                  <div key={index} className="flex gap-2">
+                    <span className="font-medium">{index + 1}.</span>
+                    {isEditing ? (
+                      <>
+                        <Textarea
+                          className="flex-1 min-h-[60px]"
+                          value={admission}
+                          onChange={(e) => handleAdmissionChange(index, e.target.value)}
+                          placeholder="Admit that..."
+                        />
+                        <Button variant="ghost" size="sm" onClick={() => handleRemoveAdmission(index)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="flex-1">{admission}</p>
+                    )}
+                  </div>
+                ))}
+                {isEditing && (
+                  <Button variant="outline" size="sm" onClick={handleAddAdmission} className="ml-6">
+                    Add Admission
+                  </Button>
+                )}
+              </div>
+            </div>
+
             {isEditing && (
               <div className="mt-4 flex justify-between">
                 <Button variant="outline" size="sm" onClick={handleResetToOriginal}>
