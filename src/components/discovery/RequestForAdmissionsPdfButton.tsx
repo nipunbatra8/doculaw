@@ -476,8 +476,22 @@ const RequestForAdmissionsPdfButton = ({
   const [showPreview, setShowPreview] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [vectorBasedAdmissions, setVectorBasedAdmissions] = useState<string[]>([]);
+  const [editedAdmissions, setEditedAdmissions] = useState<string[]>([]);
   const totalPages = 2;
   const { toast } = useToast();
+
+  // Handle admission changes from the preview component
+  const handleAdmissionsChange = (admissions: string[]) => {
+    setEditedAdmissions(admissions);
+  };
+
+  // Get the admissions to use - edited ones take priority
+  const getAdmissionsForPdf = (): string[] => {
+    if (editedAdmissions.length > 0) {
+      return editedAdmissions;
+    }
+    return vectorBasedAdmissions;
+  };
 
   /**
    * Generate admissions based on complaint vectors stored in the vector store
@@ -872,7 +886,11 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
             )}
           </div>
           
-          <RequestForAdmissionsPreview extractedData={extractedData} vectorBasedAdmissions={vectorBasedAdmissions} />
+          <RequestForAdmissionsPreview 
+            extractedData={extractedData} 
+            vectorBasedAdmissions={vectorBasedAdmissions} 
+            onAdmissionsChange={handleAdmissionsChange}
+          />
           
           <div className="px-4 py-3 border-t bg-muted/20 flex justify-end gap-2">
             <Button
@@ -885,7 +903,7 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
             </Button>
             
             <PDFDownloadLink 
-              document={<RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={vectorBasedAdmissions} />} 
+              document={<RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={getAdmissionsForPdf()} />} 
               fileName={`Request_for_Admissions_${extractedData.case?.caseNumber || ''}.pdf`}
               style={{ textDecoration: 'none' }}
             >
@@ -962,7 +980,7 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
           
           <div className="flex-1 overflow-hidden mt-4">
             <PDFViewer width="100%" height="100%" className="border rounded">
-              <RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={vectorBasedAdmissions} />
+              <RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={getAdmissionsForPdf()} />
             </PDFViewer>
           </div>
           
@@ -983,7 +1001,7 @@ Generate 10-15 admissions in the exact format shown above, each starting with "A
             
             <div className="flex gap-2">
               <PDFDownloadLink 
-                document={<RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={vectorBasedAdmissions} />} 
+                document={<RFAPdfDocument extractedData={extractedData} vectorBasedAdmissions={getAdmissionsForPdf()} />} 
                 fileName={`Request_for_Admissions_${extractedData.case?.caseNumber || ''}.pdf`}
                 className="inline-flex"
               >

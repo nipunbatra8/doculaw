@@ -1,13 +1,17 @@
 import { ComplaintInformation } from "@/integrations/gemini/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { CalendarIcon, Users, Gavel as GavelIcon, FileText as FileTextIcon } from "lucide-react";
+import { CalendarIcon, Users, Gavel as GavelIcon, FileText as FileTextIcon, Edit3, Save, X, Plus } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface RequestForAdmissionsPreviewProps {
   extractedData: ComplaintInformation;
   vectorBasedAdmissions?: string[];
+  onAdmissionsChange?: (admissions: string[]) => void;
 }
 
-const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions }: RequestForAdmissionsPreviewProps) => {
+const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions, onAdmissionsChange }: RequestForAdmissionsPreviewProps) => {
   // Default example admissions (fallback)
   const defaultAdmissions = [
     `Admit that you are a party to the contract dated ${extractedData.filingDate || 'the date specified in the complaint'}.`,
@@ -19,9 +23,53 @@ const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions }: R
   ];
 
   // Use vector-based admissions if available, otherwise fall back to default
-  const admissionsToDisplay = vectorBasedAdmissions && vectorBasedAdmissions.length > 0 
+  const initialAdmissions = vectorBasedAdmissions && vectorBasedAdmissions.length > 0 
     ? vectorBasedAdmissions 
     : defaultAdmissions;
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableAdmissions, setEditableAdmissions] = useState<string[]>(initialAdmissions);
+  const [tempAdmissions, setTempAdmissions] = useState<string[]>(initialAdmissions);
+
+  const handleEditClick = () => {
+    setTempAdmissions([...editableAdmissions]);
+    setIsEditing(true);
+  };
+
+  const handleSaveClick = () => {
+    setEditableAdmissions([...tempAdmissions]);
+    setIsEditing(false);
+    // Notify parent component of changes
+    if (onAdmissionsChange) {
+      onAdmissionsChange(tempAdmissions);
+    }
+  };
+
+  const handleCancelClick = () => {
+    setTempAdmissions([...editableAdmissions]);
+    setIsEditing(false);
+  };
+
+  const handleAdmissionChange = (index: number, value: string) => {
+    const updated = [...tempAdmissions];
+    updated[index] = value;
+    setTempAdmissions(updated);
+  };
+
+  const handleAddAdmission = () => {
+    setTempAdmissions([...tempAdmissions, 'Admit that ']);
+  };
+
+  const handleRemoveAdmission = (index: number) => {
+    const updated = tempAdmissions.filter((_, i) => i !== index);
+    setTempAdmissions(updated);
+  };
+
+  const handleResetToOriginal = () => {
+    setTempAdmissions([...initialAdmissions]);
+  };
+
+  const admissionsToDisplay = isEditing ? tempAdmissions : editableAdmissions;
 
   return (
     <div className="p-4 text-sm">
@@ -100,11 +148,23 @@ const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions }: R
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-xs uppercase text-muted-foreground">Request For Admissions</h4>
-              {vectorBasedAdmissions && vectorBasedAdmissions.length > 0 && (
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                  AI-Generated ({vectorBasedAdmissions.length})
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {vectorBasedAdmissions && vectorBasedAdmissions.length > 0 && (
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                    AI-Generated ({vectorBasedAdmissions.length})
+                  </span>
+                )}
+                {editableAdmissions.length > 0 && JSON.stringify(editableAdmissions) !== JSON.stringify(initialAdmissions) && (
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                    Edited
+                  </span>
+                )}
+                {!isEditing && (
+                  <Button variant="ghost" size="sm" onClick={handleEditClick}>
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <p className="mb-4">
               <span className="font-medium">{extractedData.formParties?.askingParty || extractedData.plaintiff || 'Plaintiff'}</span> 
@@ -117,10 +177,45 @@ const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions }: R
               {admissionsToDisplay.map((admission, index) => (
                 <div key={index} className="flex gap-2">
                   <span className="font-medium">{index + 1}.</span>
-                  <p>{admission}</p>
+                  {isEditing ? (
+                    <>
+                      <Textarea
+                        className="flex-1 min-h-[60px]"
+                        value={admission}
+                        onChange={(e) => handleAdmissionChange(index, e.target.value)}
+                        placeholder="Admit that..."
+                      />
+                      <Button variant="ghost" size="sm" onClick={() => handleRemoveAdmission(index)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="flex-1">{admission}</p>
+                  )}
                 </div>
               ))}
+              {isEditing && (
+                <Button variant="outline" size="sm" onClick={handleAddAdmission} className="ml-6">
+                  Add Admission
+                </Button>
+              )}
             </div>
+            {isEditing && (
+              <div className="mt-4 flex justify-between">
+                <Button variant="outline" size="sm" onClick={handleResetToOriginal}>
+                  Reset to Original
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={handleCancelClick}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveClick}>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
