@@ -4,10 +4,11 @@ import { CalendarIcon, Users, Gavel as GavelIcon, FileText as FileTextIcon } fro
 
 interface RequestForAdmissionsPreviewProps {
   extractedData: ComplaintInformation;
+  vectorBasedAdmissions?: string[];
 }
 
-const RequestForAdmissionsPreview = ({ extractedData }: RequestForAdmissionsPreviewProps) => {
-  // Default example admissions
+const RequestForAdmissionsPreview = ({ extractedData, vectorBasedAdmissions }: RequestForAdmissionsPreviewProps) => {
+  // Default example admissions (fallback)
   const defaultAdmissions = [
     `Admit that you are a party to the contract dated ${extractedData.filingDate || 'the date specified in the complaint'}.`,
     `Admit that you failed to perform under the terms of the contract as alleged in the complaint.`,
@@ -16,6 +17,11 @@ const RequestForAdmissionsPreview = ({ extractedData }: RequestForAdmissionsPrev
     `Admit that the court has jurisdiction over this matter.`,
     `Admit that you received a demand letter from the plaintiff prior to this lawsuit.`
   ];
+
+  // Use vector-based admissions if available, otherwise fall back to default
+  const admissionsToDisplay = vectorBasedAdmissions && vectorBasedAdmissions.length > 0 
+    ? vectorBasedAdmissions 
+    : defaultAdmissions;
 
   return (
     <div className="p-4 text-sm">
@@ -92,7 +98,14 @@ const RequestForAdmissionsPreview = ({ extractedData }: RequestForAdmissionsPrev
         {/* Request For Admissions Preview */}
         <Card>
           <CardContent className="p-4">
-            <h4 className="text-xs uppercase text-muted-foreground mb-2">Request For Admissions</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs uppercase text-muted-foreground">Request For Admissions</h4>
+              {vectorBasedAdmissions && vectorBasedAdmissions.length > 0 && (
+                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                  AI-Generated ({vectorBasedAdmissions.length})
+                </span>
+              )}
+            </div>
             <p className="mb-4">
               <span className="font-medium">{extractedData.formParties?.askingParty || extractedData.plaintiff || 'Plaintiff'}</span> 
               &nbsp;requests that&nbsp;
@@ -101,7 +114,7 @@ const RequestForAdmissionsPreview = ({ extractedData }: RequestForAdmissionsPrev
             </p>
             
             <div className="space-y-3 pl-3">
-              {defaultAdmissions.map((admission, index) => (
+              {admissionsToDisplay.map((admission, index) => (
                 <div key={index} className="flex gap-2">
                   <span className="font-medium">{index + 1}.</span>
                   <p>{admission}</p>

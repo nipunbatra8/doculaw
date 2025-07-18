@@ -6,7 +6,7 @@ import { Document as ComplaintDocumentType } from "./types";
 import { ComplaintInformation } from '@/integrations/gemini/client';
 import { CaseData } from './types';
 import FormInterrogatoriesPdfButton from './FormInterrogatoriesPdfButton';
-import RFAPdfPreviewButton from './RFAPdfPreviewButton';
+import RequestForAdmissionsPdfButton from './RequestForAdmissionsPdfButton';
 import SpecialInterrogatoriesPdfButton from './SpecialInterrogatoriesPdfButton';
 import RequestForProductionPdfButton from './RequestForProductionPdfButton';
 
@@ -87,12 +87,12 @@ const InitialScreen: React.FC<InitialScreenProps> = ({
                 Request for Admissions
               </CardTitle>
               <CardDescription>
-                Ask the opposing party to admit or deny specific facts.
+                AI-powered admissions based on your complaint content and case facts.
               </CardDescription>
             </CardHeader>
             <CardContent>
               {rfaGenerated ? (
-                <RFAPdfPreviewButton extractedData={complaintInformation} caseId={caseId} />
+                <RequestForAdmissionsPdfButton extractedData={complaintInformation} caseId={caseId} />
               ) : (
                 <Button className="w-full" onClick={() => setRfaGenerated(true)}>
                   Generate Document
