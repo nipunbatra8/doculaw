@@ -4,7 +4,9 @@
       "entrypoint": [
         "create-client-user/index.ts",
         "send-client-invitation/index.ts",
-        "delete-client-user/index.ts"
+        "delete-client-user/index.ts",
+        "client-login/index.ts",
+        "send-sms/index.ts"
       ],
       "shared": [
         "_shared/cors.ts"

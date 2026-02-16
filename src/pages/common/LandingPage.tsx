@@ -17,9 +17,20 @@ const LandingPage = () => {
     const handleHashChange = () => {
       const hash = window.location.hash;
       if (hash) {
-        const element = document.querySelector(hash);
-        if (element) {
-          element.scrollIntoView({ behavior: "smooth" });
+        // Skip if this looks like auth tokens (not a valid CSS selector)
+        if (hash.includes('access_token') || hash.includes('refresh_token') || hash.includes('error')) {
+          return;
+        }
+        
+        // Only try to scroll to element if it's a valid selector (starts with # followed by alphanumeric)
+        try {
+          const element = document.querySelector(hash);
+          if (element) {
+            element.scrollIntoView({ behavior: "smooth" });
+          }
+        } catch (e) {
+          // Invalid selector, ignore
+          console.debug('Invalid hash selector:', hash);
         }
       }
     };

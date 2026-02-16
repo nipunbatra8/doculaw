@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { FileText, Download, Loader2, AlertCircle, Eye, FileCheck, RefreshCcw, X, Info } from 'lucide-react';
@@ -10,6 +10,7 @@ import {
 } from '@/integrations/gemini/client';
 import { useToast } from '@/hooks/use-toast';
 import { useCaseDocuments } from '@/hooks/use-case-documents';
+import { supabase } from '@/integrations/supabase/client';
 
 interface FormInterrogatoriesPdfButtonProps {
   extractedData: ComplaintInformation | null;
@@ -33,14 +34,60 @@ const FormInterrogatoriesPdfButton = ({
 
   const [showPdfDialog, setShowPdfDialog] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [checkingStorage, setCheckingStorage] = useState(false);
+  const [storedPdfPath, setStoredPdfPath] = useState<string | null>(null);
+  const [savingToStorage, setSavingToStorage] = useState(false);
+  const [storageChecked, setStorageChecked] = useState(false);
 
   useEffect(() => {
-    if (extractedData && caseId && !isGenerated && !isProcessing && !errorDetails) {
-      handleGenerateFormInterrogatories();
-    }
-  }, [extractedData, caseId, isGenerated, isProcessing, errorDetails]);
+    const checkStored = async () => {
+      if (!caseId) { setStorageChecked(true); return; }
+      setCheckingStorage(true);
+      try {
+        const folder = `cases/${caseId}/forms`;
+        const { data, error } = await supabase.storage.from('doculaw').list(folder, { search: 'Form_Interrogatories.pdf' });
+        if (error) console.warn('Storage list error:', error.message);
+        const file = data?.find(f => f.name === 'Form_Interrogatories.pdf');
+        if (file) {
+          const fullPath = `${folder}/Form_Interrogatories.pdf`;
+          setStoredPdfPath(fullPath);
+          setIsGenerated(true);
+        }
+      } catch (e) {
+        console.warn('Error checking stored PDF:', e);
+      } finally {
+        setCheckingStorage(false);
+        setStorageChecked(true);
+      }
+    };
+    checkStored();
+  }, [caseId]);
 
-  const handleGenerateFormInterrogatories = async () => {
+  
+
+  const uploadPdfToStorage = async (pdfBytes: ArrayBuffer) => {
+    if (!caseId) return null;
+    try {
+      setSavingToStorage(true);
+      const folder = `cases/${caseId}/forms`;
+      const path = `${folder}/Form_Interrogatories.pdf`;
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const { error: uploadError } = await supabase.storage.from('doculaw').upload(path, blob, { contentType: 'application/pdf', upsert: true });
+      if (uploadError) throw uploadError;
+      setStoredPdfPath(path);
+      toast({ title: 'Saved to Supabase', description: 'Form Interrogatories PDF has been saved to your case files.' });
+      return path;
+    } catch (e) {
+      console.error('Failed to save PDF to storage:', e);
+      toast({ title: 'Storage Save Failed', description: 'Could not save the PDF to Supabase Storage.', variant: 'destructive' });
+      return null;
+    } finally {
+      setSavingToStorage(false);
+    }
+  };
+
+  const handleGenerateFormInterrogatories = useCallback(async () => {
+    if (storedPdfPath) return;
     if (!extractedData && !caseId) {
       toast({
         title: 'Missing Data',
@@ -191,6 +238,16 @@ const FormInterrogatoriesPdfButton = ({
       });
       setEnhancedData(dataForForm);
       setIsGenerated(true);
+
+      // Immediately render and save the generated PDF to Supabase Storage (if caseId exists)
+      if (caseId) {
+        try {
+          const pdfBytes = await fillFormInterrogatories(dataForForm, true);
+          await uploadPdfToStorage(pdfBytes);
+        } catch (saveErr) {
+          console.warn('Generated PDF could not be saved to storage:', saveErr);
+        }
+      }
     } catch (error) {
       console.error('Error generating form:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -203,30 +260,41 @@ const FormInterrogatoriesPdfButton = ({
     } finally {
       setIsProcessing(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extractedData, caseId, getComplaintFileAsBase64, toast, storedPdfPath]);
+
+  useEffect(() => {
+    if (!storageChecked) return;
+    if (storedPdfPath) return;
+    if (!caseId) return;
+    if (extractedData && !isGenerated && !isProcessing && !errorDetails) {
+      handleGenerateFormInterrogatories();
+    }
+  }, [storageChecked, storedPdfPath, caseId, extractedData, isGenerated, isProcessing, errorDetails, handleGenerateFormInterrogatories]);
   
   const handleDownloadPdf = async () => {
-    if (!enhancedData) {
-      toast({
-        title: 'Missing Data',
-        description: 'Please generate the form first.',
-        variant: 'destructive',
-      });
+    if (!enhancedData && !storedPdfPath) {
+      toast({ title: 'Missing Data', description: 'Please generate the form first.', variant: 'destructive' });
       return;
     }
     setIsProcessing(true);
     try {
-      toast({
-        title: 'Preparing PDF',
-        description: 'Creating your filled PDF for download...',
-      });
-      const pdfBytes = await fillFormInterrogatories(enhancedData, true);
       const filename = `Form_Interrogatories_${caseId || 'case'}.pdf`;
-      downloadPdf(pdfBytes, filename);
-      toast({
-        title: 'PDF Downloaded',
-        description: 'Form Interrogatories PDF has been downloaded with your case information.',
-      });
+      if (enhancedData) {
+        toast({ title: 'Preparing PDF', description: 'Creating your filled PDF for download...' });
+        const pdfBytes = await fillFormInterrogatories(enhancedData, true);
+        downloadPdf(pdfBytes, filename);
+        // Save latest to storage as well (upsert)
+        if (caseId) await uploadPdfToStorage(pdfBytes);
+        toast({ title: 'PDF Downloaded', description: 'Form Interrogatories PDF has been downloaded.' });
+      } else if (storedPdfPath) {
+        // Download from storage
+        const { data, error } = await supabase.storage.from('doculaw').download(storedPdfPath);
+        if (error || !data) throw error || new Error('No data');
+        const arrayBuffer = await data.arrayBuffer();
+        downloadPdf(arrayBuffer, filename);
+        toast({ title: 'PDF Downloaded', description: 'Downloaded saved Form Interrogatories PDF.' });
+      }
     } catch (error) {
       console.error('Error downloading PDF:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -263,18 +331,29 @@ const FormInterrogatoriesPdfButton = ({
   };
 
   const handlePreviewFilledPdf = async () => {
-    if (!enhancedData) {
+    if (!enhancedData && !storedPdfPath) {
       toast({ title: 'No Data', description: 'Generate the document first to preview.', variant: 'destructive' });
       return;
     }
     setIsProcessingPreview(true);
     try {
-      const pdfArrayBuffer = await fillFormInterrogatories(enhancedData, true);
-      const pdfBytes = new Uint8Array(pdfArrayBuffer); // Convert ArrayBuffer to Uint8Array
-      let binary = '';
-      pdfBytes.forEach(byte => binary += String.fromCharCode(byte));
-      const base64String = window.btoa(binary);
-      setPdfPreviewUrl(`data:application/pdf;base64,${base64String}`);
+      if (enhancedData) {
+        const pdfArrayBuffer = await fillFormInterrogatories(enhancedData, true);
+        const pdfBytes = new Uint8Array(pdfArrayBuffer);
+        let binary = '';
+        pdfBytes.forEach(byte => (binary += String.fromCharCode(byte)));
+        const base64String = window.btoa(binary);
+        setPdfPreviewUrl(`data:application/pdf;base64,${base64String}`);
+      } else if (storedPdfPath) {
+        const { data, error } = await supabase.storage.from('doculaw').download(storedPdfPath);
+        if (error || !data) throw error || new Error('No data');
+        const arrayBuffer = await data.arrayBuffer();
+        const pdfBytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        pdfBytes.forEach(byte => (binary += String.fromCharCode(byte)));
+        const base64String = window.btoa(binary);
+        setPdfPreviewUrl(`data:application/pdf;base64,${base64String}`);
+      }
       setShowPdfDialog(true);
     } catch (error) {
       console.error("Error generating PDF for preview:", error);
@@ -290,6 +369,7 @@ const FormInterrogatoriesPdfButton = ({
     setAnalysisMessage(null);
     setErrorDetails(null);
     setPdfPreviewUrl(null);
+  setStoredPdfPath(null);
   };
 
   if (isProcessing) {
@@ -317,10 +397,10 @@ const FormInterrogatoriesPdfButton = ({
     );
   }
 
-  if (isGenerated && enhancedData) {
+  if (isGenerated && (enhancedData || storedPdfPath)) {
     return (
       <div className="space-y-2">
-        {analysisMessage && (
+        {analysisMessage && enhancedData && (
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-700 whitespace-pre-wrap">
             <p className="font-medium mb-1">Analysis Complete:</p>
             {analysisMessage}
@@ -382,10 +462,16 @@ const FormInterrogatoriesPdfButton = ({
 
   return (
     <div className="space-y-2">
-      <Button onClick={handleGenerateFormInterrogatories} className="w-full" disabled={isProcessing || (!extractedData && !caseId)}>
-        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck className="mr-2 h-4 w-4" />}
-        Generate Document
-      </Button>
+      {checkingStorage ? (
+        <Button disabled className="w-full">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking storage...
+        </Button>
+      ) : (
+        <Button onClick={handleGenerateFormInterrogatories} className="w-full" disabled={isProcessing || (!extractedData && !caseId)}>
+          {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck className="mr-2 h-4 w-4" />}
+          Generate Document
+        </Button>
+      )}
       <Button onClick={handleDownloadOriginalForm} variant="outline" size="sm" className="w-full text-xs">
         <Download className="mr-2 h-3 w-3" /> Download Blank Judicial Council Form
       </Button>

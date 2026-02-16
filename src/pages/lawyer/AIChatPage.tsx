@@ -51,6 +51,7 @@ import {
 
 // Components
 import DocumentViewer from "@/components/discovery/DocumentViewer";
+import { SupabaseDebug } from "@/components/debug/SupabaseDebug";
 
 // Types
 interface ChatMessage {
@@ -540,6 +541,8 @@ const AIChatPage = () => {
             </div>
           </div>
         </div>
+
+        {/* <SupabaseDebug /> */}
 
         <div className="flex-1 flex flex-row overflow-hidden">
           {/* Chat Area (70%) */}

@@ -7,6 +7,12 @@ interface RequestBody {
   redirectTo: string
 }
 
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID') || ''
+const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN') || ''
+const TWILIO_PHONE_NUMBER = Deno.env.get('TWILIO_PHONE_NUMBER') || ''
+
 // This function validates if an email belongs to a client and sends a magic link
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -15,10 +21,6 @@ serve(async (req) => {
   }
 
   try {
-    // Get environment variables
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-    
     // Create a Supabase client with the service role key (admin privileges)
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     
@@ -38,7 +40,7 @@ serve(async (req) => {
     // Check if this email belongs to a client in the database
     const { data: clientData, error: clientError } = await supabase
       .from('clients')
-      .select('id, email, first_name, last_name')
+      .select('id, email, first_name, last_name, phone')
       .ilike('email', normalizedEmail)
       .limit(1)
     
@@ -57,15 +59,22 @@ serve(async (req) => {
       )
     }
     
-    // Client found, send a magic link
+    // Client found, check if auth user exists
+    const { data: { users }, error: userCheckError } = await supabase.auth.admin.listUsers()
+    const authUserExists = users?.some(u => u.email?.toLowerCase() === normalizedEmail)
+    
+    console.log('Auth user check:', { normalizedEmail, authUserExists, userCheckError })
+    
+    // Client found, send a magic link via email
     const { data: authData, error: authError } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        shouldCreateUser: false,
+        shouldCreateUser: true,
         redirectTo: redirectTo || `${new URL(req.url).origin}/auth/callback`,
-        // Set user metadata to ensure they're identified as a client
         data: {
-          user_type: 'client'
+          user_type: 'client',
+          client_id: clientData[0].id,
+          full_name: `${clientData[0].first_name} ${clientData[0].last_name}`.trim()
         }
       }
     })
@@ -80,13 +89,58 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
     }
+
+    // Also send login link via SMS if phone number exists
+    let smsSent = false
+    const clientPhone = clientData[0].phone
+    
+    if (clientPhone && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
+      try {
+        const smsBody = `DocuLaw: Your login link has been sent to ${normalizedEmail}. Check your email to sign in to your client portal.`
+
+        const twilioEndpoint = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`
+        const twilioResponse = await fetch(twilioEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`
+          },
+          body: new URLSearchParams({
+            'To': clientPhone,
+            'From': TWILIO_PHONE_NUMBER,
+            'Body': smsBody
+          })
+        })
+
+        if (twilioResponse.ok) {
+          smsSent = true
+          console.log(`SMS login notification sent to ${clientPhone}`)
+
+          // Log to sms_messages table
+          await supabase.from('sms_messages').insert({
+            client_id: clientData[0].id,
+            to_phone: clientPhone,
+            from_phone: TWILIO_PHONE_NUMBER,
+            message_body: smsBody,
+            message_type: 'login_link',
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+          })
+        } else {
+          console.error('Twilio SMS failed:', await twilioResponse.text())
+        }
+      } catch (smsError) {
+        console.error('SMS send error (non-blocking):', smsError)
+      }
+    }
     
     // Return success response
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Magic link sent successfully',
-        email: normalizedEmail
+        email: normalizedEmail,
+        sms_sent: smsSent
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )

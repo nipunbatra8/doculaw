@@ -35,12 +35,14 @@ import {
   ChevronUp,
   UserPlus,
   MessageSquare,
+  ArrowLeft,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import PdfEditor from "@/components/PdfEditor";
 import DocumentViewer from "@/components/discovery/DocumentViewer";
 import { ComplaintInformation } from "@/integrations/gemini/client";
 import ClientInviteModal from "@/components/clients/ClientInviteModal";
+import { sendSms } from "@/integrations/sms/client";
 
 // Type for case data from Supabase
 type CaseData = {
@@ -99,7 +101,7 @@ const CasePage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<string>("details");
   const [editMode, setEditMode] = useState<boolean>(false);
@@ -410,7 +412,7 @@ const CasePage = () => {
     }
   };
 
-  // Handler for client notification
+  // Handler for client notification via SMS
   const handleSendNotification = async () => {
     if (!caseData.clients || caseData.clients.length === 0) {
       toast({
@@ -421,12 +423,65 @@ const CasePage = () => {
       setNotifyDialogOpen(false);
       return;
     }
-    
-    // In a real app, you would send an email/SMS here
-    toast({
-      title: "Notifications Sent",
-      description: `Notifications have been sent to ${caseData.clients.length} client(s).`,
-    });
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    for (const clientId of caseData.clients) {
+      try {
+        // Look up client phone number
+        const { data: clientInfo } = await supabase
+          .from('clients')
+          .select('phone, first_name, last_name')
+          .eq('id', clientId)
+          .single();
+
+        if (!clientInfo?.phone) {
+          console.warn(`No phone for client ${clientId}, skipping SMS`);
+          failedCount++;
+          continue;
+        }
+
+        const fullMessage = notificationSubject 
+          ? `${notificationSubject}: ${notificationMessage}`
+          : notificationMessage;
+
+        const result = await sendSms({
+          to_phone: clientInfo.phone,
+          message_type: 'custom',
+          client_id: clientId,
+          lawyer_id: user?.id,
+          case_id: caseId,
+          custom_message: fullMessage,
+          client_name: clientInfo.first_name || 'there',
+          lawyer_name: profile?.name || 'your attorney',
+          case_name: caseData.name,
+        });
+
+        if (result.success) {
+          sentCount++;
+        } else {
+          console.error(`SMS failed for client ${clientId}:`, result.error);
+          failedCount++;
+        }
+      } catch (err) {
+        console.error(`Error sending to client ${clientId}:`, err);
+        failedCount++;
+      }
+    }
+
+    if (sentCount > 0) {
+      toast({
+        title: "Notifications Sent",
+        description: `SMS sent to ${sentCount} client(s).${failedCount > 0 ? ` ${failedCount} failed.` : ''}`,
+      });
+    } else {
+      toast({
+        title: "Notifications Failed",
+        description: "Could not send SMS to any clients. Check phone numbers.",
+        variant: "destructive"
+      });
+    }
     
     setNotifyDialogOpen(false);
     setNotificationSubject("");
@@ -615,32 +670,43 @@ const CasePage = () => {
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-gray-900">{caseData.name}</h1>
-              <Badge variant={
-                caseData.status === "Active" ? "default" : 
-                caseData.status === "Pending" ? "secondary" : 
-                "outline"
-              }>
-                {caseData.status}
-              </Badge>
-              {caseData.archived_at && (
-                <Badge variant="outline" className="ml-2">
-                  Archived
+          <div className="flex items-start gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/dashboard')}
+              className="mt-1"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold text-gray-900">{caseData.name}</h1>
+                <Badge variant={
+                  caseData.status === "Active" ? "default" : 
+                  caseData.status === "Pending" ? "secondary" : 
+                  "outline"
+                }>
+                  {caseData.status}
                 </Badge>
-              )}
+                {caseData.archived_at && (
+                  <Badge variant="outline" className="ml-2">
+                    Archived
+                  </Badge>
+                )}
+              </div>
+              <p className="text-gray-600 mt-1">Case Number: {caseData.caseNumber}</p>
             </div>
-            <p className="text-gray-600 mt-1">Case Number: {caseData.caseNumber}</p>
           </div>
           <div className="flex gap-2">
-            <Button
+            {/* <Button
                 onClick={() => navigate(`/ai-chat/${caseId}`)}
                 className="bg-purple-600 hover:bg-purple-700 text-white"
               >
               <MessageSquare className="h-4 w-4 mr-2" />
               AI Chat
-            </Button>
+            </Button> */}
             <Button
               variant="outline"
               onClick={() => setEditMode(true)}
@@ -680,7 +746,7 @@ const CasePage = () => {
           <TabsList>
             <TabsTrigger value="details">Case Details</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            {/* <TabsTrigger value="timeline">Timeline</TabsTrigger> */}
             <TabsTrigger value="client">Client Information</TabsTrigger>
           </TabsList>
           
@@ -893,16 +959,54 @@ const CasePage = () => {
                 </div>
 
                 <div className="mt-6 space-y-4">
-                  <h3 className="font-medium text-gray-800">Quick Actions</h3>
+                  <h3 className="font-medium text-gray-800">Discovery Documents</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <Button variant="outline" className="justify-start h-auto py-3 flex-col items-start" onClick={() => navigate(`/form-interrogatories/${caseId}`)}>
+                      <div className="flex items-center w-full mb-1">
+                        <FileText className="h-4 w-4 mr-2" />
+                        <span className="font-medium">Form Interrogatories</span>
+                      </div>
+                      <span className="text-xs text-gray-500 text-left">Standard questions for your case type</span>
+                    </Button>
+                    <Button variant="outline" className="justify-start h-auto py-3 flex-col items-start" onClick={() => navigate(`/special-interrogatories/${caseId}`)}>
+                      <div className="flex items-center w-full mb-1">
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        <span className="font-medium">Special Interrogatories</span>
+                      </div>
+                      <span className="text-xs text-gray-500 text-left">Custom questions for this case</span>
+                    </Button>
+                    <Button variant="outline" className="justify-start h-auto py-3 flex-col items-start" onClick={() => navigate(`/request-for-admissions/${caseId}`)}>
+                      <div className="flex items-center w-full mb-1">
+                        <FileText className="h-4 w-4 mr-2" />
+                        <span className="font-medium">Request for Admissions</span>
+                      </div>
+                      <span className="text-xs text-gray-500 text-left">Ask party to admit/deny facts</span>
+                    </Button>
+                    <Button variant="outline" className="justify-start h-auto py-3 flex-col items-start" onClick={() => navigate(`/request-for-production/${caseId}`)}>
+                      <div className="flex items-center w-full mb-1">
+                        <FileText className="h-4 w-4 mr-2" />
+                        <span className="font-medium">Request for Production</span>
+                      </div>
+                      <span className="text-xs text-gray-500 text-left">Request documents and items</span>
+                    </Button>
+                    <Button variant="outline" className="justify-start h-auto py-3 flex-col items-start" onClick={() => navigate(`/demand-letter/${caseId}`)}>
+                      <div className="flex items-center w-full mb-1">
+                        <FileText className="h-4 w-4 mr-2" />
+                        <span className="font-medium">Demand Letter</span>
+                      </div>
+                      <span className="text-xs text-gray-500 text-left">Generate a demand letter</span>
+                    </Button>
+                    <Button variant="outline" className="justify-start h-auto py-3 flex-col items-start" onClick={() => navigate(`/discovery-response/${caseId}`)}>
+                      <div className="flex items-center w-full mb-1">
+                        <FileText className="h-4 w-4 mr-2" />
+                        <span className="font-medium">Discovery Response</span>
+                      </div>
+                      <span className="text-xs text-gray-500 text-left">Draft responses to discovery</span>
+                    </Button>
+                  </div>
+                  
+                  <h3 className="font-medium text-gray-800 mt-6">Other Actions</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    <Button variant="outline" className="justify-start" onClick={() => navigate(`/discovery-request/${caseId}`)}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Propound Discovery Request
-                    </Button>
-                    <Button variant="outline" className="justify-start" onClick={() => navigate(`/discovery-response/${caseId}`)}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Draft Discovery Response
-                    </Button>
                     <Button variant="outline" className="justify-start" onClick={() => setNotifyDialogOpen(true)}>
                       <Send className="h-4 w-4 mr-2" />
                       Notify Client

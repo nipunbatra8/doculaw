@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/ge
 
 // Initialize the Gemini API with the API key from environment variables
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const geminiModel = import.meta.env.VITE_GEMINI_MODEL || "gemini-2.0-flash";
 
 if (!apiKey) {
   console.error("Gemini API key is missing. Please check your .env file.");
@@ -28,6 +29,9 @@ const safetySettings = [
     threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
   },
 ];
+
+// Export shared configuration for use in other files
+export { genAI, safetySettings, geminiModel };
 
 // Define the interface for extracted complaint information
 export interface ComplaintInformation {
@@ -79,6 +83,35 @@ export interface ComplaintInformation {
   explanation?: string;
 }
 
+export interface RfaData {
+  vectorBasedDefinitions: string[];
+  vectorBasedAdmissions: string[];
+}
+
+export interface RfpData {
+  vectorBasedDefinitions: string[];
+  vectorBasedProductions: string[];
+}
+
+export interface SiData {
+  vectorBasedDefinitions: string[];
+  vectorBasedInterrogatories: string[];
+}
+
+// ...existing code...
+export interface DemandLetterData {
+  header: string;
+  re_line: string;
+  salutation: string;
+  opening_paragraph: string;
+  medical_providers: string;
+  injuries: string;
+  damages_summary: string;
+  settlement_demand: string;
+  closing: string;
+  tone?: string;
+}
+
 /**
  * Extract information from a complaint document file using Gemini's multimodal capabilities
  * @param fileBase64 The base64-encoded file content
@@ -94,7 +127,7 @@ export async function extractComplaintInformationFromFile(
     
     // Use Gemini's vision capabilities for multimodal processing
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro",
+      model: geminiModel,
       safetySettings,
     });
     
@@ -252,7 +285,7 @@ async function extractTextFromFile(fileBase64: string, mimeType: string): Promis
   try {
     // Use Gemini's vision capabilities for OCR
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro",
+      model: geminiModel,
       safetySettings,
     });
     
@@ -292,7 +325,7 @@ export async function extractComplaintInformation(docText: string): Promise<Comp
   try {
     // For real PDF text, which might be noisy or have formatting issues
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro",
+      model: geminiModel,
       safetySettings,
     });
     
@@ -459,6 +492,134 @@ export async function extractComplaintInformation(docText: string): Promise<Comp
   }
 }
 
+export async function generateRFAWithAI(
+  complaintInfo: ComplaintInformation,
+): Promise<RfaData> {
+  const model = genAI.getGenerativeModel({
+    model: geminiModel,
+    safetySettings,
+  });
+
+  const prompt = `
+    You are a legal assistant. Based on the provided complaint information, generate a list of "definitions" and "request for admissions" for a legal document.
+
+    Complaint Information:
+    ${JSON.stringify(complaintInfo, null, 2)}
+
+    Generate 5-10 relevant definitions and 15-25 request for admissions.
+
+    Return the output as a JSON object with the following structure:
+    {
+      "vectorBasedDefinitions": ["definition 1", "definition 2", ...],
+      "vectorBasedAdmissions": ["admission 1", "admission 2", ...]
+    }
+    `;
+
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const text = response.text();
+
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('Failed to parse JSON from Gemini response.');
+  } catch (e) {
+    console.error('Error parsing RFA generation response:', e);
+    throw new Error('Failed to generate RFA data.');
+  }
+}
+
+export async function generateSIWithAI(
+  complaintInfo: ComplaintInformation,
+): Promise<SiData> {
+  const model = genAI.getGenerativeModel({
+    model: geminiModel,
+    safetySettings,
+  });
+
+  const prompt = `
+    You are a legal assistant. Based on the provided complaint information, generate a list of "definitions" and "special interrogatories" for a civil litigation discovery document.
+
+    Complaint Information:
+    ${JSON.stringify(complaintInfo, null, 2)}
+
+    Generate 5-10 relevant definitions and 20-30 special interrogatories. Interrogatories should be clear, specific, and numbered when rendered, but do not include numbers in the text itself.
+
+    Return the output as a JSON object with the following structure:
+    {
+      "vectorBasedDefinitions": ["definition 1", "definition 2", ...],
+      "vectorBasedInterrogatories": ["interrogatory 1", "interrogatory 2", ...]
+    }
+  `;
+
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const text = response.text();
+
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in SI response');
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed.vectorBasedDefinitions) || !Array.isArray(parsed.vectorBasedInterrogatories)) {
+      throw new Error('Invalid SI response shape');
+    }
+    return parsed;
+  } catch (e) {
+    console.error('Failed to parse SI JSON:', e, text);
+    return {
+      vectorBasedDefinitions: [
+        'The term "PLAINTIFF" refers to the party propounding these interrogatories.',
+        'The term "DEFENDANT" refers to the party responding to these interrogatories.',
+      ],
+      vectorBasedInterrogatories: [
+        'State your full name, address, and telephone number.',
+        'Identify each person with knowledge of the facts alleged in the complaint.',
+      ],
+    };
+  }
+}
+
+export async function generateRFPWithAI(
+  complaintInfo: ComplaintInformation,
+): Promise<RfpData> {
+  const model = genAI.getGenerativeModel({
+    model: geminiModel,
+    safetySettings,
+  });
+
+  const prompt = `
+    You are a legal assistant. Based on the provided complaint information, generate a list of "definitions" and "request for productions" for a legal document.
+
+    Complaint Information:
+    ${JSON.stringify(complaintInfo, null, 2)}
+
+    Generate 5-10 relevant definitions and 15-25 request for productions. A request for production is a legal request for documents.
+
+    Return the output as a JSON object with the following structure:
+    {
+      "vectorBasedDefinitions": ["definition 1", "definition 2", ...],
+      "vectorBasedProductions": ["production 1", "production 2", ...]
+    }
+    `;
+
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const text = response.text();
+
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('Failed to parse JSON from Gemini response.');
+  } catch (e) {
+    console.error('Error parsing RFP generation response:', e);
+    throw new Error('Failed to generate RFP data.');
+  }
+}
+
 /**
  * Analyzes a complaint document and determines which checkboxes should be checked in the Form Interrogatories
  * @param extractedInfo Initial complaint information
@@ -474,7 +635,7 @@ export async function analyzeCheckboxesForFormInterrogatories(
     
     // Use the Pro model for complex analysis
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro",
+      model: geminiModel,
       safetySettings,
     });
     
@@ -672,5 +833,546 @@ export async function analyzeCheckboxesForFormInterrogatories(
       },
       explanation: "No valid analysis found"
     };
+  }
+}
+
+export async function generateDemandLetterWithAI(
+  complaintInfo: ComplaintInformation,
+  contextDocuments: string[] = [],
+  customInstructions?: string
+): Promise<DemandLetterData> {
+  const model = genAI.getGenerativeModel({
+    model: geminiModel,
+    safetySettings,
+  });
+
+  const prompt = `You are drafting a formal insurance demand letter for bodily injury claims, similar to personal injury law firms.
+
+Complaint / Case Information:
+${JSON.stringify(complaintInfo, null, 2)}
+
+Retrieved Context Documents / Notes (may include medical records, bills, correspondence):
+${contextDocuments.slice(0,5).map((d,i)=>`[Doc ${i+1}] ${d.substring(0,1800)}`).join('\n\n')}
+
+Generate a professional demand letter matching this structure:
+{
+  "header": "Date and transmission method (e.g., 'SENT VIA ELECTRONIC MAIL adjuster@insurance.com')",
+  "re_line": "RE: [Subject line with claim info, policy limits offer, claim number, client name, date of loss]",
+  "salutation": "Dear [Adjuster Name or Ms./Mr. Last Name]:",
+  "opening_paragraph": "Brief intro stating representation, intent to settle within policy limits",
+  "medical_providers": "List enclosed medical records and providers with addresses/amounts if available",
+  "injuries": "Bullet-pointed list of specific injuries sustained",
+  "damages_summary": "Property damage details, vehicle total loss if applicable, impact description",
+  "settlement_demand": "Formal demand amount and terms for full release, waiver provisions",
+  "closing": "Professional closing with attorney signature line",
+  "tone": "formal_insurance_demand"
+}
+
+Style notes:
+- Use formal legal terminology
+- Be specific about policy limits settlement offer
+- Include medical provider details in structured format
+- List injuries as bullet points
+- Reference California Civil Code sections if relevant
+- Professional but firm tone throughout
+
+${customInstructions ? `Additional instructions: ${customInstructions}` : ''}
+
+Return ONLY valid JSON, no markdown formatting.`;
+
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const text = response.text().trim();
+
+  let cleaned = text;
+  // Strip markdown fencing
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/,'').trim();
+  }
+  // Attempt direct parse
+  try { return JSON.parse(cleaned); } catch (e) { /* ignore parse attempt */ }
+  // Fallback: extract first JSON object
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (match) {
+  try { return JSON.parse(match[0]); } catch (e) { /* ignore second parse attempt */ }
+  }
+  throw new Error('Failed to parse demand letter JSON');
+}
+
+// Discovery Response types and functions
+export interface DiscoveryQuestion {
+  id: string;
+  number?: string;
+  question: string;
+  category?: string;
+}
+
+export interface DiscoveryDocumentData {
+  documentType: string; // "Form Interrogatories", "Special Interrogatories", "RFA", "RFP"
+  propoundingParty: string;
+  respondingParty: string;
+  caseNumber?: string;
+  setNumber?: string;
+  serviceDate?: string;
+  responseDeadline?: string;
+  questions: DiscoveryQuestion[];
+}
+
+export interface ObjectionData {
+  id: string;
+  text: string;
+  selected: boolean;
+  relevance: string; // explanation of why this objection is relevant
+}
+
+/**
+ * Extract discovery questions and metadata from uploaded discovery documents
+ * @param fileBase64 Base64-encoded file content
+ * @param mimeType MIME type of the file
+ * @param documentCategory Category of discovery document
+ * @returns Extracted discovery data
+ */
+export async function extractDiscoveryDocument(
+  fileBase64: string,
+  mimeType: string,
+  documentCategory: string
+): Promise<DiscoveryDocumentData> {
+  try {
+    console.log(`Extracting ${documentCategory} document with Gemini...`);
+    
+    const model = genAI.getGenerativeModel({
+      model: geminiModel,
+      safetySettings,
+    });
+    
+    const filePart = {
+      inlineData: {
+        data: fileBase64,
+        mimeType: mimeType
+      }
+    };
+    
+    const prompt = `
+    You are a legal assistant analyzing a discovery document (${documentCategory}).
+    
+    Please extract all questions and metadata from this discovery document.
+    
+    Return a JSON object with this structure:
+    {
+      "documentType": "${documentCategory}",
+      "propoundingParty": "Name of the party propounding these requests",
+      "respondingParty": "Name of the party who must respond",
+      "caseNumber": "Case number if found",
+      "setNumber": "Set number (e.g., 'First Set', 'Second Set')",
+      "serviceDate": "Date the document was served, if found",
+      "responseDeadline": "Response deadline date, if found",
+      "questions": [
+        {
+          "id": "unique_id",
+          "number": "question number from document",
+          "question": "The full text of the question/request",
+          "category": "category if applicable (e.g., 'General', 'Incident')"
+        }
+      ]
+    }
+    
+    Extract every single question, interrogatory, request for admission, or request for production from the document.
+    Be thorough and capture all questions exactly as written.
+    Return only valid JSON with no markdown formatting.
+    `;
+    
+    const result = await model.generateContent([prompt, filePart]);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log("Gemini extraction response:", text.substring(0, 500));
+    
+    // Parse JSON response
+    try {
+      let cleaned = text.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/,'').trim();
+      }
+      return JSON.parse(cleaned);
+    } catch (parseError) {
+      console.error("Error parsing extraction response:", parseError);
+      
+      // Try to extract JSON from response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      
+      throw new Error("Failed to parse discovery document");
+    }
+  } catch (error) {
+    console.error("Error extracting discovery document:", error);
+    throw error;
+  }
+}
+
+/**
+ * Generate relevant objections based on discovery requests and case information
+ * @param discoveryData Extracted discovery document data
+ * @param caseType Type of case
+ * @param caseInfo Additional case information
+ * @returns Array of suggested objections with relevance explanations
+ */
+export async function generateObjectionsForDiscovery(
+  discoveryData: DiscoveryDocumentData,
+  caseType: string,
+  caseInfo?: ComplaintInformation
+): Promise<ObjectionData[]> {
+  try {
+    console.log("Generating AI objections for discovery...");
+    
+    const model = genAI.getGenerativeModel({
+      model: geminiModel,
+      safetySettings,
+    });
+    
+    const prompt = `
+    You are a legal assistant helping to prepare objections to discovery requests.
+    
+    Discovery Document Type: ${discoveryData.documentType}
+    Case Type: ${caseType}
+    Number of Questions: ${discoveryData.questions.length}
+    
+    Sample Questions:
+    ${discoveryData.questions.slice(0, 5).map((q, i) => `${i + 1}. ${q.question}`).join('\n')}
+    
+    ${caseInfo ? `Case Information: ${JSON.stringify(caseInfo, null, 2)}` : ''}
+    
+    Generate a comprehensive list of standard objections that should be considered for these discovery requests.
+    For each objection, indicate whether it should be selected by default based on the questions asked.
+    
+    Common objections include:
+    - Overly broad and unduly burdensome
+    - Vague and ambiguous
+    - Attorney-client privilege
+    - Work product doctrine
+    - Not relevant to claims or defenses
+    - Not proportional to needs of the case
+    - Seeks confidential or proprietary information
+    - Compound, conjunctive, or disjunctive
+    - Assumes facts not in evidence
+    
+    Return a JSON array with this structure:
+    [
+      {
+        "id": "obj_1",
+        "text": "Full text of the objection",
+        "selected": true/false,
+        "relevance": "Explanation of why this objection is or isn't relevant to these specific requests"
+      }
+    ]
+    
+    Provide 8-12 objections total. Select the most relevant ones as true.
+    Return only valid JSON with no markdown formatting.
+    `;
+    
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log("Generated objections response:", text.substring(0, 500));
+    
+    // Parse JSON response
+    try {
+      let cleaned = text.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/,'').trim();
+      }
+      return JSON.parse(cleaned);
+    } catch (parseError) {
+      console.error("Error parsing objections response:", parseError);
+      
+      // Try to extract JSON from response
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      
+      // Return default objections as fallback
+      return [
+        {
+          id: "obj_1",
+          text: "Objection to the extent that the request is overly broad and unduly burdensome.",
+          selected: true,
+          relevance: "Standard objection applicable to most discovery requests"
+        },
+        {
+          id: "obj_2",
+          text: "Objection to the extent that the request seeks information protected by attorney-client privilege.",
+          selected: true,
+          relevance: "Protects confidential attorney-client communications"
+        },
+        {
+          id: "obj_3",
+          text: "Objection to the extent that the request seeks information protected by the work product doctrine.",
+          selected: true,
+          relevance: "Protects attorney work product and trial preparation materials"
+        }
+      ];
+    }
+  } catch (error) {
+    console.error("Error generating objections:", error);
+    
+    // Return default objections on error
+    return [
+      {
+        id: "obj_1",
+        text: "Objection to the extent that the request is overly broad and unduly burdensome.",
+        selected: true,
+        relevance: "Standard objection applicable to most discovery requests"
+      },
+      {
+        id: "obj_2",
+        text: "Objection to the extent that the request seeks information protected by attorney-client privilege.",
+        selected: true,
+        relevance: "Protects confidential attorney-client communications"
+      }
+    ];
+  }
+}
+
+/**
+ * Generate objections and case narratives based on client responses
+ * @param questions Discovery questions with client responses
+ * @param caseInfo Case information
+ * @param caseType Type of case
+ * @returns Objections and narrative strategies
+ */
+export async function generateObjectionsAndNarratives(
+  questionsWithResponses: Array<{ question: string; clientResponse: string }>,
+  caseInfo?: ComplaintInformation,
+  caseType?: string
+): Promise<{
+  objections: ObjectionData[];
+  narratives: Array<{
+    id: string;
+    title: string;
+    description: string;
+    strength: 'strong' | 'moderate' | 'weak';
+    keyPoints: string[];
+    recommendedObjections: string[];
+  }>;
+  responseSuggestions: Array<{
+    questionId: string;
+    suggestion: string;
+    reasoning: string;
+  }>;
+}> {
+  try {
+    console.log("Generating objections and narratives based on client responses...");
+    
+    const model = genAI.getGenerativeModel({
+      model: geminiModel,
+      safetySettings,
+    });
+    
+    const prompt = `
+    You are a skilled litigation attorney analyzing client responses to discovery requests.
+    
+    Case Type: ${caseType || 'General'}
+    ${caseInfo ? `Case Information: ${JSON.stringify(caseInfo, null, 2)}` : ''}
+    
+    Client's Responses to Discovery Questions:
+    ${questionsWithResponses.map((q, i) => `
+    Question ${i + 1}: ${q.question}
+    Client Response: ${q.clientResponse}
+    `).join('\n')}
+    
+    Your task is to:
+    1. Generate strategic objections tailored to these specific responses
+    2. Identify potential case narrative strategies based on the responses
+    3. Provide suggestions for shaping the final responses
+    
+    Return a JSON object with this structure:
+    {
+      "objections": [
+        {
+          "id": "obj_1",
+          "text": "Full text of the objection",
+          "selected": true/false,
+          "relevance": "Why this objection is strategic for this case based on client responses"
+        }
+      ],
+      "narratives": [
+        {
+          "id": "narrative_1",
+          "title": "Brief title of the case theory/narrative",
+          "description": "Detailed explanation of this narrative strategy",
+          "strength": "strong" | "moderate" | "weak",
+          "keyPoints": ["Key point 1", "Key point 2"],
+          "recommendedObjections": ["obj_1", "obj_2"]
+        }
+      ],
+      "responseSuggestions": [
+        {
+          "questionId": "q_1",
+          "suggestion": "How to craft/shape this response",
+          "reasoning": "Why this approach is strategic"
+        }
+      ]
+    }
+    
+    Be strategic:
+    - Look for inconsistencies or areas to strengthen
+    - Identify which objections protect the client best
+    - Suggest narrative themes that align with the responses
+    - Consider what information helps or hurts the case
+    - Recommend which details to emphasize or de-emphasize
+    
+    Generate 6-10 objections, 2-4 narratives, and suggestions for key questions.
+    Return only valid JSON with no markdown formatting.
+    `;
+    
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log("Generated objections and narratives:", text.substring(0, 500));
+    
+    // Parse JSON response
+    try {
+      let cleaned = text.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/,'').trim();
+      }
+      return JSON.parse(cleaned);
+    } catch (parseError) {
+      console.error("Error parsing response:", parseError);
+      
+      // Try to extract JSON from response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      
+      // Return minimal fallback
+      return {
+        objections: [
+          {
+            id: "obj_1",
+            text: "Objection to the extent that the request is overly broad and unduly burdensome.",
+            selected: true,
+            relevance: "Standard protective objection"
+          }
+        ],
+        narratives: [
+          {
+            id: "narrative_1",
+            title: "Defense Strategy",
+            description: "Primary case narrative based on client responses",
+            strength: "moderate" as const,
+            keyPoints: ["Review client responses", "Develop strategy"],
+            recommendedObjections: ["obj_1"]
+          }
+        ],
+        responseSuggestions: []
+      };
+    }
+  } catch (error) {
+    console.error("Error generating objections and narratives:", error);
+    throw error;
+  }
+}
+
+/**
+ * Convert discovery questions into client-friendly questionnaire format
+ * @param questions Array of discovery questions
+ * @param caseInfo Case information for context
+ * @returns Array of simplified questions for client
+ */
+export async function generateClientQuestions(
+  questions: DiscoveryQuestion[],
+  caseInfo?: ComplaintInformation
+): Promise<Array<{ id: string; question: string; original: string; edited: boolean }>> {
+  try {
+    console.log("Generating client-friendly questions with Gemini...");
+    
+    const model = genAI.getGenerativeModel({
+      model: geminiModel,
+      safetySettings,
+    });
+    
+    const prompt = `
+    You are a legal assistant helping to prepare a client questionnaire.
+    
+    The following discovery questions need to be converted into simple, clear questions that a client can understand and answer.
+    
+    Original Discovery Questions:
+    ${questions.map((q, i) => `${i + 1}. ${q.question}`).join('\n\n')}
+    
+    ${caseInfo ? `Case Context: ${JSON.stringify(caseInfo, null, 2)}` : ''}
+    
+    IMPORTANT RULES:
+    1. Simplify the legal language into conversational English
+    2. Break down compound questions into separate questions
+    3. If specific dates, names, or details are available in the Case Context, USE THEM directly
+    4. If specific information is NOT available, use clear generic language like "the incident", "the accident", "the other party", etc.
+    5. NEVER use placeholder brackets like [Date of Accident] or [Person Name] - either use the actual information or use generic terms
+    6. Make questions conversational but professional
+    7. Ensure the client will understand what information is being requested
+    
+    EXAMPLES:
+    Bad: "Did you speak with [Other Party Name] on [Date]?"
+    Good (with context): "Did you speak with John Doe on January 15, 2023?"
+    Good (without context): "Did you speak with the other party involved in the incident?"
+    
+    Return a JSON array with this structure:
+    [
+      {
+        "id": "q_1",
+        "question": "Simplified client-friendly version of the question",
+        "original": "Original discovery question text",
+        "edited": false
+      }
+    ]
+    
+    Return only valid JSON with no markdown formatting.
+    `;
+    
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log("Generated client questions response:", text.substring(0, 500));
+    
+    // Parse JSON response
+    try {
+      let cleaned = text.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/,'').trim();
+      }
+      return JSON.parse(cleaned);
+    } catch (parseError) {
+      console.error("Error parsing client questions response:", parseError);
+      
+      // Try to extract JSON from response
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      
+      // Return simplified versions as fallback
+      return questions.slice(0, 20).map((q, i) => ({
+        id: `q_${i + 1}`,
+        question: q.question,
+        original: q.question,
+        edited: false
+      }));
+    }
+  } catch (error) {
+    console.error("Error generating client questions:", error);
+    
+    // Return original questions as fallback
+    return questions.slice(0, 20).map((q, i) => ({
+      id: `q_${i + 1}`,
+      question: q.question,
+      original: q.question,
+      edited: false
+    }));
   }
 }

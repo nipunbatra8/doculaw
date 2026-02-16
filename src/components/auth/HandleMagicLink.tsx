@@ -50,44 +50,86 @@ const HandleMagicLink = () => {
       try {
         console.log("Processing auth redirect");
 
-        // Get the URL parameters
+        // Get the URL parameters from both query string and hash
         const params = new URLSearchParams(window.location.search);
         const hash = window.location.hash;
+        const hashParams = hash ? new URLSearchParams(hash.substring(1)) : new URLSearchParams();
         
         // Debug info
         const urlInfo = {
           fullURL: window.location.href,
           search: window.location.search,
           hash: window.location.hash,
-          params: Object.fromEntries(params.entries())
+          params: Object.fromEntries(params.entries()),
+          hashParams: Object.fromEntries(hashParams.entries())
         };
         
         console.log("URL info:", urlInfo);
         setDebugInfo(prev => ({ ...prev, urlInfo }));
 
         // Check for errors in hash fragment
-        if (hash) {
-          const hashParams = new URLSearchParams(hash.substring(1));
-          const error = hashParams.get('error');
-          const errorCode = hashParams.get('error_code');
-          
-          if (error || errorCode) {
-            console.error("Hash error params:", { error, errorCode });
-            navigate('/expired-link', { replace: true });
-            return;
+        const error = hashParams.get('error');
+        const errorCode = hashParams.get('error_code');
+        
+        if (error || errorCode) {
+          console.error("Hash error params:", { error, errorCode });
+          navigate('/expired-link', { replace: true });
+          return;
+        }
+        
+        // Check for access tokens in hash (implicit flow)
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        
+        if (accessToken || refreshToken) {
+          console.log("Found auth tokens in hash");
+          // With detectSessionInUrl enabled, Supabase should automatically process these
+          // But let's also explicitly set the session to be sure
+          try {
+            console.log("Explicitly setting session from URL tokens");
+            const { data: setSessionData, error: setSessionError } = await supabase.auth.setSession({
+              access_token: accessToken as string,
+              refresh_token: refreshToken as string
+            });
+            
+            if (setSessionError) {
+              console.error("Error setting session:", setSessionError);
+            } else {
+              console.log("Session set successfully:", !!setSessionData.session);
+            }
+            
+            // Wait a moment for the session to be established
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (err) {
+            console.error("Exception setting session:", err);
           }
         }
 
-        // Rather than trying to manually process the token, we'll check the session
-        // Supabase should have already processed the token in the URL
-        console.log("Checking for existing session...");
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        const session = sessionData?.session;
+        // Check the session - Supabase should have processed the tokens by now
+        console.log("Checking for session...");
+        let { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        let session = sessionData?.session;
         
-        console.log("Session check result:", {
+        console.log("Initial session check result:", {
           hasSession: !!session,
-          sessionError: sessionError?.message
+          sessionError: sessionError?.message,
+          userId: session?.user?.id
         });
+        
+        // If no session but we have tokens, try one more time after another delay
+        if (!session && (accessToken || refreshToken)) {
+          console.log("No session yet, waiting a bit more...");
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const result = await supabase.auth.getSession();
+          sessionData = result.data;
+          sessionError = result.error;
+          session = sessionData?.session;
+          console.log("Second session check result:", {
+            hasSession: !!session,
+            sessionError: sessionError?.message,
+            userId: session?.user?.id
+          });
+        }
         
         setDebugInfo(prev => ({ 
           ...prev, 
@@ -179,7 +221,12 @@ const HandleMagicLink = () => {
               }
               
               const user = userData?.user;
-              console.log("User details:", { id: user?.id, email: user?.email, metadata: user?.user_metadata });
+              console.log("User details:", { 
+                id: user?.id, 
+                email: user?.email, 
+                user_metadata: user?.user_metadata,
+                app_metadata: user?.app_metadata
+              });
               
               const userType = user?.user_metadata?.user_type || 
                                user?.app_metadata?.role || 
@@ -187,14 +234,14 @@ const HandleMagicLink = () => {
               
               console.log("Determined user type:", userType);
               
-              // Force a page refresh to ensure the auth state is recognized by the app
-              if (userType === 'client') {
-                window.location.href = '/client-dashboard';
-                return;
-              } else {
-                window.location.href = '/dashboard';
-                return;
-              }
+              // Redirect based on user type
+              const redirectUrl = userType === 'client' ? '/client-dashboard' : '/dashboard';
+              console.log("Redirecting to:", redirectUrl);
+              
+              setTimeout(() => {
+                window.location.href = redirectUrl;
+              }, 100);
+              return;
             } catch (verificationError) {
               console.error("Error during verification process:", verificationError);
               setDebugInfo(prev => ({ 
@@ -211,7 +258,12 @@ const HandleMagicLink = () => {
         }
         
         // Session exists, user is authenticated
-        console.log("User authenticated:", session.user);
+        console.log("User authenticated:", {
+          id: session.user?.id,
+          email: session.user?.email,
+          user_metadata: session.user?.user_metadata,
+          app_metadata: session.user?.app_metadata
+        });
         
         // Determine user type from session
         const userType = session.user?.user_metadata?.user_type || 
@@ -228,12 +280,14 @@ const HandleMagicLink = () => {
           }
         }));
         
-        // Force a page refresh to ensure the auth state is recognized by the app
-        if (userType === 'client') {
-          window.location.href = '/client-dashboard';
-        } else {
-          window.location.href = '/dashboard';
-        }
+        // Redirect based on user type
+        const redirectUrl = userType === 'client' ? '/client-dashboard' : '/dashboard';
+        console.log("Redirecting to:", redirectUrl);
+        
+        // Use window.location.href for a full page reload to ensure auth context is fresh
+        setTimeout(() => {
+          window.location.href = redirectUrl;
+        }, 100);
       } catch (error) {
         console.error("Error processing auth redirect:", error);
         if (error instanceof Error) {

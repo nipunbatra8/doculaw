@@ -18,6 +18,11 @@ import ClientsPage from "./pages/lawyer/Clients";
 import SettingsPage from "./pages/lawyer/SettingsPage";
 import DiscoveryRequestPage from "./pages/discovery/DiscoveryRequestPage";
 import DiscoveryResponsePage from "./pages/discovery/DiscoveryResponsePage";
+import FormInterrogatoriesPage from "./pages/discovery/FormInterrogatoriesPage";
+import SpecialInterrogatoriesPage from "./pages/discovery/SpecialInterrogatoriesPage";
+import RequestForAdmissionsPage from "./pages/discovery/RequestForAdmissionsPage";
+import RequestForProductionPage from "./pages/discovery/RequestForProductionPage";
+import DemandLetterPage from "./pages/discovery/DemandLetterPage";
 import ClientDashboardPage from "./pages/client/ClientDashboardPage";
 import ClientSettingsPage from "./pages/client/ClientSettingsPage";
 import CasePage from "./pages/lawyer/CasePage";
@@ -32,16 +37,29 @@ import AIChatPage from "./pages/lawyer/AIChatPage";
 // Auth provider
 import { AuthProvider } from "./context/AuthContext";
 
-// Hash fragment error handler
+// Hash fragment and magic link handler
 const HashErrorHandler = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
   useEffect(() => {
-    // Check for error parameters in the URL hash
+    // Check for magic link token parameters in URL query
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+    const type = params.get('type');
+    
+    // If we have magic link params at root, redirect to auth/callback
+    if (token && type === 'magiclink' && location.pathname === '/') {
+      console.log('Detected magic link at root, redirecting to /auth/callback');
+      navigate(`/auth/callback${location.search}`, { replace: true });
+      return;
+    }
+    
+    // Also check for auth tokens in hash fragment (some Supabase flows use this)
     if (location.hash) {
-      // Convert hash to URLSearchParams for easier parsing
       const hashParams = new URLSearchParams(location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
       const error = hashParams.get('error');
       const errorCode = hashParams.get('error_code');
       
@@ -49,9 +67,18 @@ const HashErrorHandler = () => {
       if (error === 'access_denied' || errorCode === 'otp_expired') {
         console.log('Detected auth error in URL hash:', { error, errorCode });
         navigate('/expired-link', { replace: true });
+        return;
+      }
+      
+      // If we have auth tokens in hash at root, redirect to auth/callback
+      if ((accessToken || refreshToken) && location.pathname === '/') {
+        console.log('Detected auth tokens in hash at root, redirecting to /auth/callback');
+        // Use window.location for more reliable hash preservation
+        window.location.href = `/auth/callback${location.hash}`;
+        return;
       }
     }
-  }, [location.hash, navigate]);
+  }, [location.hash, location.search, location.pathname, navigate]);
   
   return null;
 };
@@ -144,6 +171,41 @@ const App = () => {
                   <ProtectedRoute>
                     <RouteGuard allowedUserTypes={['lawyer']}>
                       <DiscoveryResponsePage />
+                    </RouteGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/form-interrogatories/:caseId" element={
+                  <ProtectedRoute>
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <FormInterrogatoriesPage />
+                    </RouteGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/special-interrogatories/:caseId" element={
+                  <ProtectedRoute>
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <SpecialInterrogatoriesPage />
+                    </RouteGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/request-for-admissions/:caseId" element={
+                  <ProtectedRoute>
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <RequestForAdmissionsPage />
+                    </RouteGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/request-for-production/:caseId" element={
+                  <ProtectedRoute>
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <RequestForProductionPage />
+                    </RouteGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/demand-letter/:caseId" element={
+                  <ProtectedRoute>
+                    <RouteGuard allowedUserTypes={['lawyer']}>
+                      <DemandLetterPage />
                     </RouteGuard>
                   </ProtectedRoute>
                 } />

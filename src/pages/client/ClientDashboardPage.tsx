@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import ClientLayout from "@/components/layout/ClientLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { 
   Card, 
   CardContent, 
@@ -31,109 +29,49 @@ import {
   FileText, 
   CheckCircle2, 
   Clock, 
-  Send, 
-  AlertTriangle, 
   PenLine,
-  ClipboardCheck,
   Eye,
+  Loader2,
+  FileQuestion,
   Mic,
-  Loader2
+  Info
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { sendSms } from "@/integrations/sms/client";
 
-// Mock data for client questionnaires
-const questionnairesData = [
-  { 
-    id: "1", 
-    title: "Smith v. Johnson - Interrogatories", 
-    caseNumber: "CV-2023-12345", 
-    status: "In Progress", 
-    sentDate: "Aug 5, 2023",
-    dueDate: "Aug 20, 2023",
-    completedQuestions: 3,
-    totalQuestions: 8
-  },
-  { 
-    id: "2", 
-    title: "Smith v. Johnson - Request for Production", 
-    caseNumber: "CV-2023-12345", 
-    status: "Not Started", 
-    sentDate: "Aug 10, 2023",
-    dueDate: "Aug 25, 2023",
-    completedQuestions: 0,
-    totalQuestions: 12
-  },
-  { 
-    id: "3", 
-    title: "Smith v. Acme Corp - Interrogatories", 
-    caseNumber: "CV-2023-67890", 
-    status: "Completed", 
-    sentDate: "Jul 15, 2023",
-    dueDate: "Jul 30, 2023",
-    completedQuestions: 6,
-    totalQuestions: 6
-  },
-];
+// Interface for questionnaire from database
+interface Questionnaire {
+  id: string;
+  title: string;
+  case_name: string;
+  case_number: string | null;
+  status: 'pending' | 'in_progress' | 'completed';
+  sent_at: string;
+  response_deadline: string | null;
+  completed_questions: number;
+  total_questions: number;
+  discovery_type: string | null;
+  lawyer_id: string | null;
+  case_id: string | null;
+  completed_at: string | null;
+  questions: Array<{
+    id: string;
+    question: string;
+    original: string;
+    edited: boolean;
+  }>;
+}
 
-// Mock data for active questionnaire
-const activeQuestionnaireData = {
-  id: "1",
-  title: "Smith v. Johnson - Interrogatories",
-  caseNumber: "CV-2023-12345",
-  dueDate: "Aug 20, 2023",
-  questions: [
-    {
-      id: "q1",
-      text: "Please describe in detail the events leading up to the incident on January 15, 2023.",
-      answer: "I was driving northbound on Main Street when the defendant ran a red light at the intersection of Main and Oak Streets, colliding with the passenger side of my vehicle.",
-      completed: true
-    },
-    {
-      id: "q2",
-      text: "Identify all witnesses who were present at the time of the incident.",
-      answer: "Sarah Williams, a pedestrian waiting to cross the street; Officer James Rodriguez who responded to the scene; and my passenger, Michael Thompson.",
-      completed: true
-    },
-    {
-      id: "q3",
-      text: "Describe all injuries you claim to have sustained as a result of the incident.",
-      answer: "Whiplash injuries to my neck, a sprained right wrist, bruised ribs, and persistent headaches. I've also experienced anxiety and difficulty sleeping since the accident.",
-      completed: true
-    },
-    {
-      id: "q4",
-      text: "Identify all healthcare providers who have treated you for injuries allegedly sustained in the incident.",
-      answer: "",
-      completed: false
-    },
-    {
-      id: "q5",
-      text: "Describe all economic damages you claim to have suffered as a result of the incident.",
-      answer: "",
-      completed: false
-    },
-    {
-      id: "q6",
-      text: "Have you been involved in any other accidents or incidents that resulted in injury in the past 10 years? If so, please describe each incident and any injuries sustained.",
-      answer: "",
-      completed: false
-    },
-    {
-      id: "q7",
-      text: "Identify all medications you are currently taking or have taken for injuries allegedly sustained in the incident.",
-      answer: "",
-      completed: false
-    },
-    {
-      id: "q8",
-      text: "Have you missed any work as a result of the incident? If so, state the dates you missed work and calculate the amount of income lost.",
-      answer: "",
-      completed: false
-    },
-  ]
-};
+interface QuestionResponse {
+  id: string;
+  question_id: string;
+  question_text: string;
+  response_text: string | null;
+}
 
 // Add type definitions for Speech Recognition API
 interface SpeechRecognitionEvent {
@@ -199,63 +137,176 @@ declare global {
   interface Window {
     SpeechRecognition?: typeof SpeechRecognition;
     webkitSpeechRecognition?: typeof SpeechRecognition;
+    __elevenlabsWidgetLoaded?: boolean;
+  }
+  interface ElevenLabsConvaiProps extends React.HTMLAttributes<HTMLElement> {
+    'agent-id'?: string;
+    'voice-id'?: string;
+  }
+  // Allow the custom element in JSX without using a namespace declaration
+  interface HTMLElementTagNameMap {
+    'elevenlabs-convai': HTMLElement;
+  }
+}
+
+// Extend JSX IntrinsicElements via declaration merging
+declare module 'react' {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace JSX {
+    interface IntrinsicElements {
+      'elevenlabs-convai': ElevenLabsConvaiProps;
+    }
   }
 }
 
 const ClientDashboardPage = () => {
-  const [activeQuestionnaire, setActiveQuestionnaire] = useState(activeQuestionnaireData);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
-  const [signatureName, setSignatureName] = useState("");
-  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState("pending");
+  const [selectedQuestionnaireId, setSelectedQuestionnaireId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [currentAnswer, setCurrentAnswer] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Get client record for current user
+  const { data: clientRecord } = useQuery({
+    queryKey: ['clientRecord', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) {
+        console.error("Error fetching client record:", error);
+        return null;
+      }
+      
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  // Fetch all questionnaires for this client
+  const { data: questionnaires, isLoading: isLoadingQuestionnaires, refetch: refetchQuestionnaires } = useQuery<Questionnaire[]>({
+    queryKey: ['clientQuestionnaires', clientRecord?.id],
+    queryFn: async () => {
+      if (!user || !clientRecord) return [];
+      
+      const { data, error } = await supabase
+        .from('client_questionnaires')
+        .select('*')
+        .eq('client_id', clientRecord.id)
+        .order('sent_at', { ascending: false });
+      
+      if (error) {
+        console.error("Error fetching questionnaires:", error);
+        return [];
+      }
+      
+      return data || [];
+    },
+    enabled: !!user && !!clientRecord,
+  });
+
+  // Fetch responses for the selected questionnaire
+  const { data: questionnaireResponses, isLoading: isLoadingResponses, refetch: refetchResponses } = useQuery<QuestionResponse[]>({
+    queryKey: ['questionnaireResponses', selectedQuestionnaireId],
+    queryFn: async () => {
+      if (!selectedQuestionnaireId) return [];
+      
+      const { data, error } = await supabase
+        .from('client_responses')
+        .select('*')
+        .eq('questionnaire_id', selectedQuestionnaireId)
+        .order('question_id');
+      
+      if (error) {
+        console.error("Error fetching responses:", error);
+        return [];
+      }
+      
+      // Responses fetched
+      return data || [];
+    },
+    enabled: !!selectedQuestionnaireId,
+    refetchInterval: 5000, // Refetch every 5 seconds to keep responses fresh
+  });
+
+  // Get active questionnaire
+  const activeQuestionnaire = questionnaires?.find(q => q.id === selectedQuestionnaireId);
+  const currentQuestion = activeQuestionnaire?.questions?.[currentQuestionIndex];
+  const currentResponse = questionnaireResponses?.find(r => r.question_id === currentQuestion?.id);
   
-  const currentQuestion = activeQuestionnaire.questions[currentQuestionIndex];
-  const completedCount = activeQuestionnaire.questions.filter(q => q.completed).length;
-  const completionPercentage = (completedCount / activeQuestionnaire.questions.length) * 100;
-  
-  // Check if speech-to-text is enabled in user settings
-  const isSpeechEnabled = user?.user_metadata?.title === "speech-enabled" || true; // Default to true if not set
-  
-  const handleAnswerChange = (value: string) => {
-    const updatedQuestions = [...activeQuestionnaire.questions];
-    updatedQuestions[currentQuestionIndex] = {
-      ...updatedQuestions[currentQuestionIndex],
-      answer: value,
-      completed: value.trim().length > 0
-    };
-    
-    setActiveQuestionnaire({
-      ...activeQuestionnaire,
-      questions: updatedQuestions
-    });
-  };
-  
-  const handleNextQuestion = () => {
-    if (currentQuestionIndex < activeQuestionnaire.questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
+  // Update currentAnswer when question changes
+  useEffect(() => {
+    if (currentResponse) {
+      setCurrentAnswer(currentResponse.response_text || '');
     }
-  };
+  }, [currentResponse]);
   
-  const handlePrevQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1);
+  // Debug logging
+  useEffect(() => {
+    if (isModalOpen && activeQuestionnaire) {
+      // Debug logging removed for production
+    }
+  }, [isModalOpen, activeQuestionnaire, currentQuestionIndex, currentQuestion, currentResponse]);
+
+  // Comment out ElevenLabs for now
+  /*
+  // Load ElevenLabs Convai widget script once
+  useEffect(() => {
+    if (window.__elevenlabsWidgetLoaded) return;
+    const scriptId = 'elevenlabs-convai-script';
+    if (document.getElementById(scriptId)) return;
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/@elevenlabs/convai-widget-embed';
+    script.async = true;
+    script.id = scriptId;
+    script.onload = () => { window.__elevenlabsWidgetLoaded = true; };
+    document.body.appendChild(script);
+  }, []);
+  */
+  
+  const saveAnswer = async () => {
+    if (!currentQuestion || !selectedQuestionnaireId || !currentResponse) return;
+    
+    setIsSaving(true);
+    
+    try {
+      // Save to database
+      const { error } = await supabase
+        .from('client_responses')
+        .update({
+          response_text: currentAnswer,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentResponse.id);
+      
+      if (error) throw error;
+      
+      // Refetch to update progress
+      await refetchResponses();
+      await refetchQuestionnaires();
+    } catch (error) {
+      console.error("Error saving response:", error);
+      toast({
+        title: "Save Failed",
+        description: "Could not save your response. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleMicrophoneClick = () => {
-    if (!isSpeechEnabled) {
-      toast({
-        title: "Speech-to-text disabled",
-        description: "Enable speech-to-text in your account settings to use this feature.",
-        variant: "default",
-      });
-      return;
-    }
-
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       toast({
         title: "Speech recognition not supported",
@@ -269,35 +320,35 @@ const ClientDashboardPage = () => {
       setIsRecording(true);
       
       // Initialize speech recognition
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
       
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
       
-      let finalTranscript = currentQuestion.answer;
+      let finalTranscript = currentAnswer;
       
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
+      recognition.onresult = (event: any) => {
         let interimTranscript = '';
         
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
+            finalTranscript += (finalTranscript ? ' ' : '') + event.results[i][0].transcript;
           } else {
             interimTranscript += event.results[i][0].transcript;
           }
         }
         
         // Update the answer with current transcription
-        handleAnswerChange(finalTranscript + interimTranscript);
+        setCurrentAnswer(finalTranscript + interimTranscript);
       };
       
       recognition.onend = () => {
         setIsRecording(false);
       };
       
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      recognition.onerror = (event: any) => {
         console.error('Speech recognition error', event.error);
         setIsRecording(false);
         
@@ -318,7 +369,7 @@ const ClientDashboardPage = () => {
       
       // Stop recording when clicking elsewhere
       setTimeout(() => {
-        document.addEventListener('click', stopRecording);
+        document.addEventListener('click', stopRecording, { once: true });
       }, 100);
       
     } catch (error) {
@@ -332,45 +383,6 @@ const ClientDashboardPage = () => {
       });
     }
   };
-  
-  const handleSubmit = () => {
-    const unansweredCount = activeQuestionnaire.questions.filter(q => !q.completed).length;
-    
-    if (unansweredCount > 0) {
-      toast({
-        title: "Incomplete questionnaire",
-        description: `You have ${unansweredCount} unanswered question${unansweredCount !== 1 ? 's' : ''}. Please complete all questions before submitting.`,
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setSignatureDialogOpen(true);
-  };
-  
-  const handleSubmitWithSignature = () => {
-    if (!signatureName.trim()) {
-      toast({
-        title: "Signature required",
-        description: "Please provide your full name to electronically sign this questionnaire.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setLoading(true);
-    setSignatureDialogOpen(false);
-    
-    // Simulate submission
-    setTimeout(() => {
-      setLoading(false);
-      setSuccessDialogOpen(true);
-    }, 1500);
-  };
-
-  const jumpToQuestion = (index: number) => {
-    setCurrentQuestionIndex(index);
-  };
 
   return (
     <ClientLayout>
@@ -382,11 +394,11 @@ const ClientDashboardPage = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="active" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full md:w-auto grid-cols-3">
-            <TabsTrigger value="active" className="flex items-center">
+            <TabsTrigger value="pending" className="flex items-center">
               <Clock className="h-4 w-4 mr-2" />
-              Active
+              Pending
             </TabsTrigger>
             <TabsTrigger value="completed" className="flex items-center">
               <CheckCircle2 className="h-4 w-4 mr-2" />
@@ -398,297 +410,204 @@ const ClientDashboardPage = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="active" className="mt-6">
-            <div className="grid gap-6 md:grid-cols-3">
-              <div className="md:col-span-2 space-y-6">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle>{activeQuestionnaire.title}</CardTitle>
-                        <CardDescription>
-                          Case: {activeQuestionnaire.caseNumber} • Due: {activeQuestionnaire.dueDate}
-                        </CardDescription>
-                      </div>
-                      <Badge 
-                        variant="outline" 
-                        className="bg-amber-50 text-amber-700 border-amber-200"
-                      >
-                        In Progress
-                      </Badge>
-                    </div>
-                    <div className="mt-4">
-                      <div className="flex justify-between text-sm mb-1">
-                        <span>{completedCount} of {activeQuestionnaire.questions.length} questions completed</span>
-                        <span>{Math.round(completionPercentage)}%</span>
-                      </div>
-                      <Progress value={completionPercentage} className="h-2" />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pb-0">
-                    <div className="space-y-6">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-medium">
-                            Question {currentQuestionIndex + 1} of {activeQuestionnaire.questions.length}
-                          </h3>
-                          <Badge variant={currentQuestion.completed ? "default" : "outline"}>
-                            {currentQuestion.completed ? "Answered" : "Unanswered"}
+          <TabsContent value="pending" className="mt-6">
+            {isLoadingQuestionnaires ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                <span className="ml-2 text-gray-600">Loading questionnaires...</span>
+              </div>
+            ) : questionnaires && questionnaires.filter(q => q.status !== 'completed').length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-3">
+                {questionnaires
+                  .filter(q => q.status !== 'completed')
+                  .map(questionnaire => (
+                    <Card key={questionnaire.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">{questionnaire.title}</CardTitle>
+                            <CardDescription>
+                              Case: {questionnaire.case_number || 'N/A'}
+                            </CardDescription>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={
+                              questionnaire.status === "in_progress"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : ""
+                            }
+                          >
+                            {questionnaire.status === 'in_progress' ? 'In Progress' : 'Pending'}
                           </Badge>
                         </div>
-                        <p className="text-gray-700">
-                          {currentQuestion.text}
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <label className="font-medium text-sm">Your Answer:</label>
-                          {isSpeechEnabled && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className={`${isRecording ? 'bg-red-100 text-red-600 border-red-300 animate-pulse' : 'text-doculaw-600 hover:text-doculaw-700 hover:bg-doculaw-50'}`}
-                              onClick={handleMicrophoneClick}
-                              disabled={isRecording}
-                              title="Click to answer with voice"
-                            >
-                              {isRecording ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                              ) : (
-                                <Mic className="h-5 w-5" />
-                              )}
-                            </Button>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Sent:</span>
+                            <span>{new Date(questionnaire.sent_at).toLocaleDateString()}</span>
+                          </div>
+                          {questionnaire.response_deadline && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-500">Due:</span>
+                              <span className={
+                                new Date(questionnaire.response_deadline) < new Date()
+                                  ? 'text-red-600 font-medium'
+                                  : ''
+                              }>
+                                {new Date(questionnaire.response_deadline).toLocaleDateString()}
+                              </span>
+                            </div>
                           )}
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Progress:</span>
+                            <span>{questionnaire.completed_questions} of {questionnaire.total_questions}</span>
+                          </div>
+                          <div className="pt-2">
+                            <Progress
+                              value={(questionnaire.completed_questions / questionnaire.total_questions) * 100}
+                              className="h-2"
+                            />
+                          </div>
                         </div>
-                        <div className="relative">
-                          <Textarea 
-                            value={currentQuestion.answer}
-                            onChange={(e) => handleAnswerChange(e.target.value)}
-                            placeholder="Enter your answer here..."
-                            rows={6}
-                            className="resize-none"
-                          />
-                          {isSpeechEnabled && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className={`absolute right-3 bottom-3 ${isRecording ? 'bg-red-100 text-red-600 border-red-300 animate-pulse' : 'text-gray-500 hover:text-doculaw-600'}`}
-                              onClick={handleMicrophoneClick}
-                              disabled={isRecording}
-                              title="Click to answer with voice"
-                            >
-                              <Mic className="h-5 w-5" />
-                            </Button>
-                          )}
-                        </div>
-                        {isRecording && (
-                          <p className="text-sm text-center text-red-600 animate-pulse">
-                            Listening... Speak clearly and click anywhere to stop.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between pt-6">
-                    <div>
-                      <Button
-                        variant="outline"
-                        onClick={handlePrevQuestion}
-                        disabled={currentQuestionIndex === 0}
-                      >
-                        Previous
-                      </Button>
-                    </div>
-                    <div>
-                      {currentQuestionIndex < activeQuestionnaire.questions.length - 1 ? (
-                        <Button 
-                          onClick={handleNextQuestion}
-                          className="bg-doculaw-500 hover:bg-doculaw-600"
+                      </CardContent>
+                      <CardFooter className="border-t pt-4">
+                        <Button
+                          className="w-full bg-doculaw-500 hover:bg-doculaw-600"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedQuestionnaireId(questionnaire.id);
+                            setCurrentQuestionIndex(0);
+                            setIsModalOpen(true);
+                          }}
                         >
-                          Next Question
-                        </Button>
-                      ) : (
-                        <Button 
-                          onClick={handleSubmit}
-                          className="bg-doculaw-500 hover:bg-doculaw-600"
-                          disabled={loading}
-                        >
-                          {loading ? (
-                            "Submitting..."
+                          {questionnaire.completed_questions > 0 ? (
+                            <>
+                              <PenLine className="h-4 w-4 mr-2" />
+                              Continue
+                            </>
                           ) : (
                             <>
-                              <Send className="h-4 w-4 mr-2" />
-                              Submit All Answers
+                              <PenLine className="h-4 w-4 mr-2" />
+                              Start
                             </>
                           )}
                         </Button>
-                      )}
-                    </div>
-                  </CardFooter>
-                </Card>
+                      </CardFooter>
+                    </Card>
+                  ))}
               </div>
-
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <ClipboardCheck className="h-5 w-5 mr-2 text-doculaw-500" />
-                      Question Navigator
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-4 gap-2">
-                      {activeQuestionnaire.questions.map((question, index) => (
-                        <Button
-                          key={question.id}
-                          variant={index === currentQuestionIndex ? "default" : "outline"}
-                          className={`h-10 w-10 p-0 ${
-                            question.completed 
-                              ? "border-green-300 bg-green-50 text-green-700" 
-                              : ""
-                          } ${
-                            index === currentQuestionIndex && question.completed
-                              ? "bg-green-600 text-white hover:bg-green-700"
-                              : index === currentQuestionIndex
-                              ? "bg-doculaw-500 text-white hover:bg-doculaw-600"
-                              : ""
-                          }`}
-                          onClick={() => jumpToQuestion(index)}
-                        >
-                          {index + 1}
-                        </Button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <AlertTriangle className="h-5 w-5 mr-2 text-amber-500" />
-                      Important Information
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Answer Truthfully</p>
-                      <p className="text-sm text-gray-500">
-                        All answers must be truthful and accurate. False information may be subject to penalties under oath.
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Be Thorough</p>
-                      <p className="text-sm text-gray-500">
-                        Provide complete answers to all questions. "I don't know" or "I don't recall" are acceptable if true.
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Save Progress</p>
-                      <p className="text-sm text-gray-500">
-                        Your answers are automatically saved. You can come back and complete this questionnaire later.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                  <h3 className="font-medium text-amber-800 mb-2 flex items-center">
-                    <Clock className="h-4 w-4 mr-2" />
-                    Deadline Approaching
-                  </h3>
-                  <p className="text-sm text-amber-700">
-                    Please complete this questionnaire by <span className="font-semibold">{activeQuestionnaire.dueDate}</span> to ensure your attorney has time to prepare responses.
-                  </p>
-                </div>
+            ) : (
+              <div className="text-center py-12">
+                <FileQuestion className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Pending Questionnaires</h3>
+                <p className="text-gray-500">You don't have any pending questionnaires at the moment.</p>
               </div>
-            </div>
+            )}
           </TabsContent>
 
           <TabsContent value="completed" className="mt-6">
-            <div className="grid gap-6 md:grid-cols-3">
-              {questionnairesData
-                .filter(q => q.status === "Completed")
-                .map(questionnaire => (
-                  <Card key={questionnaire.id}>
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">{questionnaire.title}</CardTitle>
-                          <CardDescription>
-                            Case: {questionnaire.caseNumber}
-                          </CardDescription>
+            {isLoadingQuestionnaires ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                <span className="ml-2 text-gray-600">Loading questionnaires...</span>
+              </div>
+            ) : questionnaires && questionnaires.filter(q => q.status === 'completed').length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-3">
+                {questionnaires
+                  .filter(q => q.status === 'completed')
+                  .map(questionnaire => (
+                    <Card key={questionnaire.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">{questionnaire.title}</CardTitle>
+                            <CardDescription>
+                              Case: {questionnaire.case_number || 'N/A'}
+                            </CardDescription>
+                          </div>
+                          <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                            Completed
+                          </Badge>
                         </div>
-                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                          Completed
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Sent:</span>
-                          <span>{questionnaire.sentDate}</span>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Sent:</span>
+                            <span>{new Date(questionnaire.sent_at).toLocaleDateString()}</span>
+                          </div>
+                          {questionnaire.completed_at && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-500">Completed:</span>
+                              <span>{new Date(questionnaire.completed_at).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Questions:</span>
+                            <span>{questionnaire.total_questions}</span>
+                          </div>
+                          <div className="pt-2">
+                            <Progress value={100} className="h-2" />
+                          </div>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Completed:</span>
-                          <span>{questionnaire.dueDate}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Questions:</span>
-                          <span>{questionnaire.totalQuestions}</span>
-                        </div>
-                        <div className="pt-2">
-                          <Progress value={100} className="h-2" />
-                        </div>
-                      </div>
-                    </CardContent>
-                    <CardFooter className="border-t pt-4">
-                      <Button variant="outline" className="w-full" size="sm">
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Answers
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-
-              {questionnairesData.filter(q => q.status === "Completed").length === 0 && (
-                <div className="col-span-3 text-center py-12">
-                  <CheckCircle2 className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-1">No completed questionnaires</h3>
-                  <p className="text-gray-500">
-                    You have not completed any questionnaires yet.
-                  </p>
-                </div>
-              )}
-            </div>
+                      </CardContent>
+                      <CardFooter className="border-t pt-4">
+                        <Button 
+                          variant="outline" 
+                          className="w-full" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedQuestionnaireId(questionnaire.id);
+                            setIsModalOpen(true);
+                          }}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Answers
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <CheckCircle2 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Completed Questionnaires</h3>
+                <p className="text-gray-500">Completed questionnaires will appear here.</p>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="all" className="mt-6">
-            <div className="grid gap-6 md:grid-cols-3">
-              {questionnairesData.map(questionnaire => (
+            {isLoadingQuestionnaires ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                <span className="ml-2 text-gray-600">Loading questionnaires...</span>
+              </div>
+            ) : questionnaires && questionnaires.length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-3">
+                {questionnaires.map(questionnaire => (
                 <Card key={questionnaire.id}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
                         <CardTitle className="text-lg">{questionnaire.title}</CardTitle>
                         <CardDescription>
-                          Case: {questionnaire.caseNumber}
+                          Case: {questionnaire.case_number || 'N/A'}
                         </CardDescription>
                       </div>
                       <Badge 
-                        variant={questionnaire.status === "Completed" ? "default" : "outline"}
+                        variant={questionnaire.status === "completed" ? "default" : "outline"}
                         className={
-                          questionnaire.status === "Completed" 
+                          questionnaire.status === "completed" 
                             ? "bg-green-100 text-green-700 hover:bg-green-100" 
-                            : questionnaire.status === "In Progress"
+                            : questionnaire.status === "in_progress"
                             ? "bg-amber-50 text-amber-700 border-amber-200"
                             : ""
                         }
                       >
-                        {questionnaire.status}
+                        {questionnaire.status === 'completed' ? 'Completed' : questionnaire.status === 'in_progress' ? 'In Progress' : 'Pending'}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -696,27 +615,43 @@ const ClientDashboardPage = () => {
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Sent:</span>
-                        <span>{questionnaire.sentDate}</span>
+                        <span>{new Date(questionnaire.sent_at).toLocaleDateString()}</span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Due:</span>
-                        <span>{questionnaire.dueDate}</span>
-                      </div>
+                      {questionnaire.response_deadline && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Due:</span>
+                          <span className={
+                            new Date(questionnaire.response_deadline) < new Date()
+                              ? 'text-red-600 font-medium'
+                              : ''
+                          }>
+                            {new Date(questionnaire.response_deadline).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Progress:</span>
-                        <span>{questionnaire.completedQuestions} of {questionnaire.totalQuestions}</span>
+                        <span>{questionnaire.completed_questions} of {questionnaire.total_questions}</span>
                       </div>
                       <div className="pt-2">
                         <Progress 
-                          value={(questionnaire.completedQuestions / questionnaire.totalQuestions) * 100} 
+                          value={(questionnaire.completed_questions / questionnaire.total_questions) * 100} 
                           className="h-2" 
                         />
                       </div>
                     </div>
                   </CardContent>
                   <CardFooter className="border-t pt-4">
-                    {questionnaire.status === "Completed" ? (
-                      <Button variant="outline" className="w-full" size="sm">
+                    {questionnaire.status === "completed" ? (
+                      <Button 
+                        variant="outline" 
+                        className="w-full" 
+                        size="sm"
+                        onClick={() => {
+                          setSelectedQuestionnaireId(questionnaire.id);
+                          setIsModalOpen(true);
+                        }}
+                      >
                         <Eye className="h-4 w-4 mr-2" />
                         View Answers
                       </Button>
@@ -724,8 +659,13 @@ const ClientDashboardPage = () => {
                       <Button 
                         className="w-full bg-doculaw-500 hover:bg-doculaw-600" 
                         size="sm"
+                        onClick={() => {
+                          setSelectedQuestionnaireId(questionnaire.id);
+                          setCurrentQuestionIndex(0);
+                          setIsModalOpen(true);
+                        }}
                       >
-                        {questionnaire.completedQuestions > 0 ? (
+                        {questionnaire.completed_questions > 0 ? (
                           <>
                             <PenLine className="h-4 w-4 mr-2" />
                             Continue
@@ -742,94 +682,222 @@ const ClientDashboardPage = () => {
                 </Card>
               ))}
             </div>
+            ) : (
+              <div className="text-center py-12">
+                <FileQuestion className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Questionnaires Yet</h3>
+                <p className="text-gray-500">You haven't received any questionnaires from your attorney.</p>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Signature Dialog */}
-      <Dialog open={signatureDialogOpen} onOpenChange={setSignatureDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Electronic Signature</DialogTitle>
-            <DialogDescription>
-              Please provide your full legal name to electronically sign this questionnaire.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="signature-name">Full Legal Name</Label>
-              <Input 
-                id="signature-name"
-                value={signatureName}
-                onChange={(e) => setSignatureName(e.target.value)}
-                placeholder="Enter your full legal name"
-              />
+      {/* Questionnaire Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {!activeQuestionnaire ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <span className="ml-2 text-gray-600">Loading questionnaire...</span>
             </div>
-            
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-              <p className="text-amber-800">
-                By typing your name and submitting this questionnaire, you certify that your answers are true and accurate to the best of your knowledge.
-              </p>
-            </div>
-          </div>
-          
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button 
-              variant="outline" 
-              className="sm:flex-1"
-              onClick={() => setSignatureDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              className="sm:flex-1 bg-doculaw-500 hover:bg-doculaw-600"
-              onClick={handleSubmitWithSignature}
-            >
-              Sign & Submit
-            </Button>
-          </DialogFooter>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>{activeQuestionnaire.title}</DialogTitle>
+                <DialogDescription>
+                  Case: {activeQuestionnaire.case_number} 
+                  {activeQuestionnaire.response_deadline && (
+                    <> • Due: {new Date(activeQuestionnaire.response_deadline).toLocaleDateString()}</>
+                  )}
+                </DialogDescription>
+                <div className="mt-4">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span>{activeQuestionnaire.completed_questions} of {activeQuestionnaire.total_questions} questions answered</span>
+                    <span>{Math.round((activeQuestionnaire.completed_questions / activeQuestionnaire.total_questions) * 100)}%</span>
+                  </div>
+                  <Progress value={(activeQuestionnaire.completed_questions / activeQuestionnaire.total_questions) * 100} className="h-2" />
+                </div>
+              </DialogHeader>
+              
+              {!activeQuestionnaire.questions || activeQuestionnaire.questions.length === 0 ? (
+                <div className="py-12 text-center text-gray-500">
+                  <p>No questions found in this questionnaire.</p>
+                </div>
+              ) : !currentQuestion ? (
+                <div className="py-12 text-center text-gray-500">
+                  <p>Question not found.</p>
+                  <p className="text-sm mt-2">Question index: {currentQuestionIndex} of {activeQuestionnaire.questions.length}</p>
+                </div>
+              ) : !currentResponse ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-600">Loading response...</span>
+                </div>
+              ) : (
+                <div className="space-y-6 mt-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">
+                        Question {currentQuestionIndex + 1} of {activeQuestionnaire.total_questions}
+                      </h3>
+                      <Badge variant={currentResponse.response_text ? "default" : "outline"}>
+                        {currentResponse.response_text ? "Answered" : "Unanswered"}
+                      </Badge>
+                    </div>
+                    <p className="text-gray-700">
+                      {currentQuestion.question}
+                    </p>
+                    {currentQuestion.original && currentQuestion.original !== currentQuestion.question && (
+                      <details className="mt-3">
+                        <summary className="text-sm text-gray-500 cursor-pointer hover:text-gray-700 flex items-center">
+                          <Info className="h-4 w-4 mr-1" />
+                          Show original legal question
+                        </summary>
+                        <div className="mt-2 p-3 bg-gray-50 rounded-lg border text-sm text-gray-700">
+                          {currentQuestion.original}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="font-medium text-sm">Your Answer:</label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleMicrophoneClick}
+                        disabled={isRecording || activeQuestionnaire.status === 'completed'}
+                        className={isRecording ? 'bg-red-100 text-red-600 border-red-300' : ''}
+                      >
+                        {isRecording ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Recording...
+                          </>
+                        ) : (
+                          <>
+                            <Mic className="h-4 w-4 mr-2" />
+                            Voice Input
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <Textarea 
+                      value={currentAnswer}
+                      onChange={(e) => setCurrentAnswer(e.target.value)}
+                      placeholder="Enter your answer here or use voice input..."
+                      rows={8}
+                      className="resize-none"
+                      disabled={activeQuestionnaire.status === 'completed'}
+                    />
+                    {isRecording && (
+                      <p className="text-sm text-center text-red-600 animate-pulse">
+                        Listening... Click anywhere to stop recording.
+                      </p>
+                    )}
+                    {isSaving && (
+                      <p className="text-sm text-gray-500">Saving...</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              <DialogFooter className="flex justify-between mt-6">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (currentQuestionIndex > 0) {
+                      await saveAnswer();
+                      setCurrentQuestionIndex(currentQuestionIndex - 1);
+                    }
+                  }}
+                  disabled={currentQuestionIndex === 0 || activeQuestionnaire.status === 'completed' || isSaving}
+                >
+                  Previous
+                </Button>
+                <Button
+                  onClick={async () => {
+                    await saveAnswer();
+                    
+                    if (currentQuestionIndex < (activeQuestionnaire.total_questions - 1)) {
+                      setCurrentQuestionIndex(currentQuestionIndex + 1);
+                    } else if (activeQuestionnaire.status !== 'completed') {
+                      // All questions answered - mark questionnaire as completed
+                      try {
+                        await supabase
+                          .from('client_questionnaires')
+                          .update({
+                            status: 'completed',
+                            completed_questions: activeQuestionnaire.total_questions,
+                            completed_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                          })
+                          .eq('id', activeQuestionnaire.id);
+
+                        // Notify the lawyer via SMS
+                        if (activeQuestionnaire.lawyer_id) {
+                          const { data: lawyerProfile } = await supabase
+                            .from('profiles')
+                            .select('phone, name')
+                            .eq('id', activeQuestionnaire.lawyer_id)
+                            .single();
+                          
+                          if (lawyerProfile?.phone) {
+                            const clientName = user?.user_metadata?.full_name || 'Your client';
+                            sendSms({
+                              to_phone: lawyerProfile.phone,
+                              message_type: 'completion',
+                              client_id: user?.user_metadata?.client_id,
+                              lawyer_id: activeQuestionnaire.lawyer_id,
+                              case_id: activeQuestionnaire.case_id,
+                              questionnaire_id: activeQuestionnaire.id,
+                              client_name: clientName,
+                              case_name: activeQuestionnaire.case_name,
+                              question_count: activeQuestionnaire.total_questions,
+                            }).catch(err => console.warn('Completion SMS error:', err));
+                          }
+                        }
+                      } catch (err) {
+                        console.error('Error marking questionnaire complete:', err);
+                      }
+
+                      await refetchQuestionnaires();
+                      toast({
+                        title: "Questionnaire Complete",
+                        description: "All responses have been saved. Your attorney has been notified.",
+                      });
+                      setIsModalOpen(false);
+                    } else {
+                      setIsModalOpen(false);
+                    }
+                  }}
+                  className="bg-doculaw-500 hover:bg-doculaw-600"
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    currentQuestionIndex < (activeQuestionnaire.total_questions - 1) ? 'Save & Continue' : 'Save & Close'
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* Success Dialog */}
-      <Dialog open={successDialogOpen} onOpenChange={setSuccessDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center text-green-600">
-              <CheckCircle2 className="h-6 w-6 mr-2" />
-              Questionnaire Submitted
-            </DialogTitle>
-            <DialogDescription>
-              Your answers have been successfully submitted to your attorney.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="py-4">
-            <div className="rounded-lg border p-4 bg-gray-50">
-              <h4 className="font-medium mb-1">{activeQuestionnaire.title}</h4>
-              <div className="text-sm text-gray-500 space-y-1">
-                <p>Case: {activeQuestionnaire.caseNumber}</p>
-                <p>Submitted: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}</p>
-                <p>Questions Answered: {activeQuestionnaire.questions.length}</p>
-              </div>
-              <div className="flex items-center text-sm text-green-600 mt-3">
-                <CheckCircle2 className="h-4 w-4 mr-1" />
-                Electronically signed by {signatureName}
-              </div>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button 
-              className="w-full bg-doculaw-500 hover:bg-doculaw-600"
-              onClick={() => setSuccessDialogOpen(false)}
-            >
-              Return to Dashboard
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ElevenLabs Conversational AI Widget - Commented out for now
+      <elevenlabs-convai
+        agent-id="agent_5601k5tm15hvfxsbdj84tjwe07xz"
+        className="fixed bottom-4 right-4 z-50"
+      ></elevenlabs-convai>
+      */}
     </ClientLayout>
   );
 };

@@ -217,14 +217,40 @@ serve(async (req) => {
 
       if (!twilioResponse.ok) {
         const twilioError = await twilioResponse.text();
+        
+        // Log failed SMS to database
+        await supabase.from('sms_messages').insert({
+          client_id: clientId,
+          to_phone: phone,
+          from_phone: TWILIO_PHONE_NUMBER,
+          message_body: messageBody,
+          message_type: 'invitation',
+          status: 'failed',
+          error_message: twilioError,
+        });
+
         throw new Error(`Twilio SMS sending failed: ${twilioError}`);
       }
+
+      const twilioResult = await twilioResponse.json();
+
+      // Log successful SMS to database
+      await supabase.from('sms_messages').insert({
+        client_id: clientId,
+        to_phone: phone,
+        from_phone: TWILIO_PHONE_NUMBER,
+        message_body: messageBody,
+        message_type: 'invitation',
+        status: 'sent',
+        twilio_message_sid: twilioResult.sid,
+        sent_at: new Date().toISOString(),
+      });
 
       return new Response(
         JSON.stringify({
           success: true,
           message: 'Client invited successfully via SMS',
-          magicLink: magicLink // Still include the link in the response for backup
+          magicLink: magicLink
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
