@@ -137,7 +137,7 @@ serve(async (req) => {
   try {
     // Create a Supabase client with the service role key
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-    
+
     // Parse request body
     const { email, firstName, lastName, lawyerName, clientId, redirectTo, phone } = await req.json() as RequestBody
 
@@ -148,12 +148,16 @@ serve(async (req) => {
       )
     }
 
+    // Log the redirectTo for debugging
+    const finalRedirectTo = `https://doculaw.vercel.app/auth/callback?clientId=${clientId}`
+    console.log('Generating magic link with redirectTo:', finalRedirectTo)
+
     // Generate a real magic link using Supabase Auth
     const { data, error } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email,
       options: {
-        redirectTo: `https://doculaw.vercel.app/auth/callback?clientId=${clientId}`,
+        redirectTo: finalRedirectTo,
       },
     })
 
@@ -170,7 +174,7 @@ serve(async (req) => {
     // Update client record with an invitation sent timestamp
     const { error: updateError } = await supabase
       .from('clients')
-      .update({ 
+      .update({
         invitation_sent_at: new Date().toISOString(),
         status: 'invited',
         invitation_url: magicLink // Store the magic link in the database
@@ -201,7 +205,7 @@ serve(async (req) => {
     try {
       const twilioEndpoint = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
       const messageBody = `Hello ${firstName}, ${lawyerName} has invited you to DocuLaw, your secure client portal. Use this link to access your account: ${magicLink}`;
-      
+
       const twilioResponse = await fetch(twilioEndpoint, {
         method: 'POST',
         headers: {
@@ -217,7 +221,7 @@ serve(async (req) => {
 
       if (!twilioResponse.ok) {
         const twilioError = await twilioResponse.text();
-        
+
         // Log failed SMS to database
         await supabase.from('sms_messages').insert({
           client_id: clientId,
@@ -256,7 +260,7 @@ serve(async (req) => {
       );
     } catch (smsError) {
       console.error('Error sending SMS:', smsError);
-      
+
       // If SMS fails, we still want to return the magic link
       return new Response(
         JSON.stringify({

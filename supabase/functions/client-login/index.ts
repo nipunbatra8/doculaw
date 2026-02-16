@@ -65,12 +65,15 @@ serve(async (req) => {
 
     console.log('Auth user check:', { normalizedEmail, authUserExists, userCheckError })
 
+    // Log the redirectTo for debugging
+    console.log('Using redirectTo:', redirectTo || `https://doculaw.vercel.app/auth/callback`)
+
     // Client found, send a magic link via email
     const { data: authData, error: authError } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
         shouldCreateUser: true,
-        redirectTo: redirectTo || `https://doculaw.vercel.app/auth/callback`,
+        emailRedirectTo: redirectTo || `https://doculaw.vercel.app/auth/callback`,
         data: {
           user_type: 'client',
           client_id: clientData[0].id,
