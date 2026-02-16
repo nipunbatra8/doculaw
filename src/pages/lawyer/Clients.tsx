@@ -53,23 +53,23 @@ const ClientsPage = () => {
     queryKey: ['clients', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      
+
       const { data, error } = await supabase
         .from('clients')
         .select('*')
         .eq('lawyer_id', user.id);
-      
+
       if (error) {
         throw error;
       }
-      
+
       // Get counts of cases per client
       const clientsCases: Record<string, number> = {};
       const { data: casesData, error: casesError } = await supabase
         .from('cases')
         .select('id, clients')
         .eq('user_id', user.id);
-      
+
       if (casesError) {
         console.error("Error fetching cases:", casesError);
       } else if (casesData) {
@@ -84,7 +84,7 @@ const ClientsPage = () => {
           }
         });
       }
-      
+
       // Transform the data to include status and cases_count
       return data.map(client => {
         // Determine status based on user_id or other fields
@@ -92,7 +92,7 @@ const ClientsPage = () => {
         if (!client.user_id) {
           status = 'Pending';
         }
-        
+
         return {
           ...client,
           name: `${client.first_name} ${client.last_name}`,
@@ -112,7 +112,7 @@ const ClientsPage = () => {
 
   const filterClients = () => {
     if (!clients) return;
-    
+
     let filtered = [...clients];
 
     // Filter by search term
@@ -180,7 +180,7 @@ const ClientsPage = () => {
 
   const handleResendInvite = async (client: Client) => {
     if (!user) return;
-    
+
     try {
       // Get lawyer name for the email
       const { data: profileData, error: profileError } = await supabase
@@ -190,7 +190,7 @@ const ClientsPage = () => {
         .single();
 
       if (profileError) throw profileError;
-      
+
       const lawyerName = profileData?.name || "Your lawyer";
 
       // Resend the invitation email
@@ -201,7 +201,7 @@ const ClientsPage = () => {
           lastName: client.last_name,
           lawyerName: lawyerName,
           clientId: client.id,
-          redirectTo: `${window.location.origin}/client-dashboard`
+          redirectTo: `https://doculaw.vercel.app/client-dashboard`
         },
       });
 
@@ -230,7 +230,7 @@ const ClientsPage = () => {
             <p className="text-gray-600 mt-1">Manage your clients and their cases</p>
           </div>
           <div className="flex gap-3">
-            <Button 
+            <Button
               className="bg-doculaw-500 hover:bg-doculaw-600"
               onClick={() => setShowInviteModal(true)}
             >
@@ -240,7 +240,7 @@ const ClientsPage = () => {
           </div>
         </div>
 
-        <ClientsFilters 
+        <ClientsFilters
           onSearch={handleSearch}
           onFilterChange={handleFilterChange}
         />
@@ -273,12 +273,12 @@ const ClientsPage = () => {
                 </div>
                 <h3 className="text-lg font-medium">No clients found</h3>
                 <p className="text-gray-500 mt-2">
-                  {clients.length === 0 
-                    ? "You haven't added any clients yet." 
+                  {clients.length === 0
+                    ? "You haven't added any clients yet."
                     : "No clients match your current filters."}
                 </p>
                 {clients.length === 0 && (
-                  <Button 
+                  <Button
                     className="mt-4 bg-doculaw-500 hover:bg-doculaw-600"
                     onClick={() => setShowInviteModal(true)}
                   >
@@ -317,9 +317,9 @@ const ClientsPage = () => {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant={client.status.toLowerCase() === "active" ? "default" : 
-                                 client.status.toLowerCase() === "invited" ? "secondary" :
-                                 client.status.toLowerCase() === "pending" ? "outline" : "secondary"}
+                          variant={client.status.toLowerCase() === "active" ? "default" :
+                            client.status.toLowerCase() === "invited" ? "secondary" :
+                              client.status.toLowerCase() === "pending" ? "outline" : "secondary"}
                         >
                           {client.status}
                         </Badge>
@@ -334,16 +334,16 @@ const ClientsPage = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               className="cursor-pointer"
                               onClick={() => handleEditClient(client)}
                             >
                               <Pencil className="mr-2 h-4 w-4" />
                               Edit Client
                             </DropdownMenuItem>
-                            
+
                             {client.status.toLowerCase() === "pending" && (
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 className="cursor-pointer"
                                 onClick={() => handleResendInvite(client)}
                               >
@@ -351,10 +351,10 @@ const ClientsPage = () => {
                                 Resend Invitation
                               </DropdownMenuItem>
                             )}
-                            
+
                             <DropdownMenuSeparator />
-                            
-                            <DropdownMenuItem 
+
+                            <DropdownMenuItem
                               className="cursor-pointer text-amber-600"
                               onClick={() => {
                                 toast({
@@ -379,19 +379,19 @@ const ClientsPage = () => {
         </Card>
       </div>
 
-      <ClientInviteModal 
+      <ClientInviteModal
         open={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         onSuccess={handleClientInvited}
       />
-      
+
       <EditClientModal
         open={showEditModal}
         onClose={() => setShowEditModal(false)}
         onSuccess={handleClientEdited}
         client={clientToEdit}
       />
-      
+
       <DeleteClientModal
         open={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}

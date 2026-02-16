@@ -18,7 +18,7 @@ const ForgotPasswordPage = () => {
     e.preventDefault();
     setIsSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/reset-password",
+      redirectTo: "https://doculaw.vercel.app/reset-password",
     });
     setIsSubmitting(false);
 
@@ -99,16 +99,16 @@ const ForgotPasswordPage = () => {
                     <span className="font-medium">{email}</span>
                   </p>
                   <div className="space-y-4">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="w-full"
                       onClick={() => setIsSubmitted(false)}
                     >
                       Try a different email
                     </Button>
                     <Link to="/login">
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         className="w-full text-gray-600"
                       >
                         Back to login

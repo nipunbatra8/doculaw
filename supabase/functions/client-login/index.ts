@@ -23,7 +23,7 @@ serve(async (req) => {
   try {
     // Create a Supabase client with the service role key (admin privileges)
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-    
+
     // Parse the request body
     const { email, redirectTo } = await req.json() as RequestBody
 
@@ -36,41 +36,41 @@ serve(async (req) => {
 
     // Normalize the email
     const normalizedEmail = email.trim().toLowerCase()
-    
+
     // Check if this email belongs to a client in the database
     const { data: clientData, error: clientError } = await supabase
       .from('clients')
       .select('id, email, first_name, last_name, phone')
       .ilike('email', normalizedEmail)
       .limit(1)
-    
+
     // Log client lookup results (for debugging)
     console.log('Client lookup:', { normalizedEmail, found: clientData && clientData.length > 0, clientError })
-    
+
     // If no client found, return an error
     if (clientError || !clientData || clientData.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
+        JSON.stringify({
+          success: false,
           error: 'This email is not registered as a client',
-          details: 'Please contact your lawyer for an invitation' 
+          details: 'Please contact your lawyer for an invitation'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       )
     }
-    
+
     // Client found, check if auth user exists
     const { data: { users }, error: userCheckError } = await supabase.auth.admin.listUsers()
     const authUserExists = users?.some(u => u.email?.toLowerCase() === normalizedEmail)
-    
+
     console.log('Auth user check:', { normalizedEmail, authUserExists, userCheckError })
-    
+
     // Client found, send a magic link via email
     const { data: authData, error: authError } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
         shouldCreateUser: true,
-        redirectTo: redirectTo || `${new URL(req.url).origin}/auth/callback`,
+        redirectTo: redirectTo || `https://doculaw.vercel.app/auth/callback`,
         data: {
           user_type: 'client',
           client_id: clientData[0].id,
@@ -78,13 +78,13 @@ serve(async (req) => {
         }
       }
     })
-    
+
     if (authError) {
       console.error('Error generating magic link:', authError)
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: authError.message 
+        JSON.stringify({
+          success: false,
+          error: authError.message
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
@@ -93,7 +93,7 @@ serve(async (req) => {
     // Also send login link via SMS if phone number exists
     let smsSent = false
     const clientPhone = clientData[0].phone
-    
+
     if (clientPhone && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
       try {
         const smsBody = `DocuLaw: Your login link has been sent to ${normalizedEmail}. Check your email to sign in to your client portal.`
@@ -133,7 +133,7 @@ serve(async (req) => {
         console.error('SMS send error (non-blocking):', smsError)
       }
     }
-    
+
     // Return success response
     return new Response(
       JSON.stringify({
@@ -147,9 +147,9 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error processing request:', error)
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'An unknown error occurred' 
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'An unknown error occurred'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )

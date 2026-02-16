@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle
 } from "@/components/ui/card";
 import {
   Select,
@@ -32,14 +32,14 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { 
-  ArrowLeft, 
-  FileText, 
-  UploadCloud, 
-  Info, 
-  Check, 
-  X, 
-  AlertCircle, 
+import {
+  ArrowLeft,
+  FileText,
+  UploadCloud,
+  Info,
+  Check,
+  X,
+  AlertCircle,
   CheckCircle2,
   AlertTriangle,
   Users,
@@ -137,9 +137,9 @@ const DiscoveryResponsePage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, profile } = useAuth();
-  
+
   const [activeStep, setActiveStep] = useState(1);
-  
+
   // Multiple discovery document categories
   const [uploadedFiles, setUploadedFiles] = useState<{
     formInterrogatories: File | null;
@@ -152,7 +152,7 @@ const DiscoveryResponsePage = () => {
     requestsForProduction: null,
     specialInterrogatories: null,
   });
-  
+
   // Extracted data from documents
   const [extractedDiscoveryData, setExtractedDiscoveryData] = useState<{
     formInterrogatories: DiscoveryDocumentData | null;
@@ -165,11 +165,11 @@ const DiscoveryResponsePage = () => {
     requestsForProduction: null,
     specialInterrogatories: null,
   });
-  
+
   const [isExtracting, setIsExtracting] = useState(false);
   const [caseType, setCaseType] = useState("");
   const [detectedCaseType, setDetectedCaseType] = useState("");
-  
+
   // Client responses and AI-generated content (moved to after client responds)
   const [clientResponses, setClientResponses] = useState<ClientResponse[]>([]);
   const [hasClientResponded, setHasClientResponded] = useState(false);
@@ -178,7 +178,7 @@ const DiscoveryResponsePage = () => {
   const [editingObjectionId, setEditingObjectionId] = useState<string | null>(null);
   const [aiEditingObjectionId, setAiEditingObjectionId] = useState<string | null>(null);
   const [objectionAiModalOpen, setObjectionAiModalOpen] = useState(false);
-  
+
   // New: Store multiple objections per request and selected response type
   const [requestObjections, setRequestObjections] = useState<Record<string, {
     objections: string[];
@@ -186,12 +186,12 @@ const DiscoveryResponsePage = () => {
     useDirectAnswer: boolean;
     directAnswer: string;
   }>>({});
-  
+
   const [caseNarratives, setCaseNarratives] = useState<CaseNarrative[]>([]);
   const [selectedNarrative, setSelectedNarrative] = useState<string>("");
   const [responseSuggestions, setResponseSuggestions] = useState<ResponseSuggestion[]>([]);
   const [isGeneratingStrategy, setIsGeneratingStrategy] = useState(false);
-  
+
   const [selectedClient, setSelectedClient] = useState("");
   const [editedQuestions, setEditedQuestions] = useState<Array<{
     id: string;
@@ -206,7 +206,7 @@ const DiscoveryResponsePage = () => {
   const [aiEditingQuestionId, setAiEditingQuestionId] = useState<string | null>(null);
   const [isAiEditing, setIsAiEditing] = useState(false);
   const [bulkAiEditModalOpen, setBulkAiEditModalOpen] = useState(false);
-  
+
   // State for editing individual objection options
   const [editingObjection, setEditingObjection] = useState<{
     requestIndex: number;
@@ -217,7 +217,7 @@ const DiscoveryResponsePage = () => {
     requestIndex: number;
     optionIndex: number;
   } | null>(null);
-  
+
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -358,14 +358,14 @@ const DiscoveryResponsePage = () => {
     queryKey: ['case', caseId],
     queryFn: async () => {
       if (!user || !caseId) return null;
-      
+
       const { data, error } = await supabase
         .from('cases')
         .select('*')
         .eq('id', caseId)
         .eq('user_id', user.id)
         .single();
-      
+
       if (error) {
         console.error("Error fetching case data:", error);
         toast({
@@ -386,7 +386,7 @@ const DiscoveryResponsePage = () => {
       setCaseClientDetails([]);
       return;
     }
-    
+
     setIsLoadingCaseClients(true);
     try {
       // Fetch details for all clients assigned to this case
@@ -394,15 +394,15 @@ const DiscoveryResponsePage = () => {
         .from('clients')
         .select('*')
         .in('id', caseData.clients);
-      
+
       if (error) throw error;
-      
+
       // Process clients to include full name for display
       const clientsWithFullName = (data || []).map(client => ({
         ...client,
         fullName: `${client.first_name} ${client.last_name}`
       }));
-      
+
       setCaseClientDetails(clientsWithFullName);
     } catch (error) {
       console.error('Error fetching case client details:', error);
@@ -426,7 +426,7 @@ const DiscoveryResponsePage = () => {
     queryKey: ['clientQuestionnaire', caseId, selectedClient],
     queryFn: async () => {
       if (!user || !caseId || !selectedClient) return null;
-      
+
       const { data, error } = await supabase
         .from('client_questionnaires')
         .select('*')
@@ -435,12 +435,12 @@ const DiscoveryResponsePage = () => {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      
+
       if (error) {
         console.error("Error fetching questionnaire:", error);
         return null;
       }
-      
+
       return data;
     },
     enabled: !!user && !!caseId && !!selectedClient,
@@ -454,14 +454,14 @@ const DiscoveryResponsePage = () => {
       if (activeStep < 4) {
         setActiveStep(5);
       }
-      
+
       // Load the questions from the questionnaire into editedQuestions
       if (activeQuestionnaire.questions && activeQuestionnaire.questions.length > 0) {
         setEditedQuestions(activeQuestionnaire.questions);
       }
-      
+
       setHasClientResponded(activeQuestionnaire.status === 'completed');
-      
+
       if (activeQuestionnaire.status === 'completed') {
         // Fetch the actual responses
         const fetchResponses = async () => {
@@ -469,7 +469,7 @@ const DiscoveryResponsePage = () => {
             .from('client_responses')
             .select('*')
             .eq('questionnaire_id', activeQuestionnaire.id);
-          
+
           if (!error && responses) {
             const clientResponsesData: ClientResponse[] = responses.map(r => ({
               questionId: r.question_id,
@@ -480,7 +480,7 @@ const DiscoveryResponsePage = () => {
             setClientResponses(clientResponsesData);
           }
         };
-        
+
         fetchResponses();
 
         // Send completion notification to lawyer (one-time)
@@ -694,7 +694,7 @@ const DiscoveryResponsePage = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setUploadedFiles(prev => ({ ...prev, [category]: file }));
-      
+
       // Automatically extract information from the uploaded document
       setIsExtracting(true);
       try {
@@ -702,9 +702,9 @@ const DiscoveryResponsePage = () => {
           title: "Processing Document",
           description: `Extracting information from ${category}...`,
         });
-        
+
         const { base64, mimeType } = await fileToBase64(file);
-        
+
         // Map category to friendly names
         const categoryNames: Record<string, string> = {
           formInterrogatories: "Form Interrogatories",
@@ -712,21 +712,21 @@ const DiscoveryResponsePage = () => {
           requestsForProduction: "Requests for Production",
           specialInterrogatories: "Special Interrogatories",
         };
-        
+
         const extractedData = await extractDiscoveryDocument(
           base64,
           mimeType,
           categoryNames[category]
         );
-        
+
         setExtractedDiscoveryData(prev => ({
           ...prev,
           [category]: extractedData,
         }));
-        
+
         // Save the document and extracted data
         await uploadAndSaveDocument(file, category, extractedData);
-        
+
         toast({
           title: "Document Saved",
           description: `Successfully extracted and saved ${extractedData.questions.length} questions from ${categoryNames[category]}.`,
@@ -826,10 +826,10 @@ const DiscoveryResponsePage = () => {
 
   const handleSaveQuestion = () => {
     if (editQuestionId) {
-      setEditedQuestions(prevQuestions => 
-        prevQuestions.map(q => 
-          q.id === editQuestionId 
-            ? { ...q, question: editQuestionText, edited: true } 
+      setEditedQuestions(prevQuestions =>
+        prevQuestions.map(q =>
+          q.id === editQuestionId
+            ? { ...q, question: editQuestionText, edited: true }
             : q
         )
       );
@@ -844,10 +844,10 @@ const DiscoveryResponsePage = () => {
   };
 
   const handleResetQuestion = (questionId: string) => {
-    setEditedQuestions(prevQuestions => 
-      prevQuestions.map(q => 
-        q.id === questionId 
-          ? { ...q, question: q.original, edited: false } 
+    setEditedQuestions(prevQuestions =>
+      prevQuestions.map(q =>
+        q.id === questionId
+          ? { ...q, question: q.original, edited: false }
           : q
       )
     );
@@ -864,12 +864,12 @@ const DiscoveryResponsePage = () => {
 
   const handleApplyAiEdit = async (prompt: string) => {
     if (!aiEditingQuestionId) return;
-    
+
     const question = editedQuestions.find(q => q.id === aiEditingQuestionId);
     if (!question) return;
-    
+
     setIsAiEditing(true);
-    
+
     try {
       const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
       const result = await model.generateContent(`You are helping a lawyer prepare client-friendly discovery questions.
@@ -880,16 +880,16 @@ User's Instruction: ${prompt}
 
 Please modify the question according to the user's instruction while keeping it clear and appropriate for a client to answer. Return only the modified question, nothing else.`);
       const editedText = result.response.text().trim();
-      
+
       if (editedText) {
-        setEditedQuestions(prevQuestions => 
-          prevQuestions.map(q => 
-            q.id === aiEditingQuestionId 
-              ? { ...q, question: editedText, edited: true } 
+        setEditedQuestions(prevQuestions =>
+          prevQuestions.map(q =>
+            q.id === aiEditingQuestionId
+              ? { ...q, question: editedText, edited: true }
               : q
           )
         );
-        
+
         toast({
           title: "Question Updated",
           description: "AI has successfully edited the question.",
@@ -911,11 +911,11 @@ Please modify the question according to the user's instruction while keeping it 
   // AI Edit all questions
   const handleBulkAiEdit = async (prompt: string) => {
     setIsAiEditing(true);
-    
+
     try {
       const updatedQuestions = [];
       const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
-      
+
       for (const question of editedQuestions) {
         const result = await model.generateContent(`You are helping a lawyer prepare client-friendly discovery questions.
 
@@ -925,16 +925,16 @@ User's Instruction: ${prompt}
 
 Please modify the question according to the user's instruction while keeping it clear and appropriate for a client to answer. Return only the modified question, nothing else.`);
         const editedText = result.response.text().trim();
-        
+
         if (editedText) {
           updatedQuestions.push({ ...question, question: editedText, edited: true });
         } else {
           updatedQuestions.push(question);
         }
       }
-      
+
       setEditedQuestions(updatedQuestions);
-      
+
       toast({
         title: "All Questions Updated",
         description: "AI has successfully edited all questions.",
@@ -957,7 +957,7 @@ Please modify the question according to the user's instruction while keeping it 
     if (!objection) return;
 
     setIsAiEditing(true);
-    
+
     try {
       const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
       const result = await model.generateContent(`You are helping a lawyer draft discovery objections.
@@ -968,16 +968,16 @@ Current Objection: ${objection.objection}
 
 Please generate a NEW alternative objection for this question. Make it legally sound and professionally written. Return only the new objection text, nothing else.`);
       const newObjection = result.response.text().trim();
-      
+
       if (newObjection) {
-        setSuggestedObjections(prevObjections => 
-          prevObjections.map(o => 
-            o.id === objectionId 
-              ? { ...o, objection: newObjection } 
+        setSuggestedObjections(prevObjections =>
+          prevObjections.map(o =>
+            o.id === objectionId
+              ? { ...o, objection: newObjection }
               : o
           )
         );
-        
+
         toast({
           title: "Objection Regenerated",
           description: "AI has generated a new objection.",
@@ -1003,12 +1003,12 @@ Please generate a NEW alternative objection for this question. Make it legally s
 
   const handleApplyObjectionAiEdit = async (prompt: string) => {
     if (!aiEditingObjectionId) return;
-    
+
     const objection = suggestedObjections.find(o => o.id === aiEditingObjectionId);
     if (!objection) return;
-    
+
     setIsAiEditing(true);
-    
+
     try {
       const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
       const result = await model.generateContent(`You are helping a lawyer draft discovery objections.
@@ -1021,16 +1021,16 @@ User's Instruction: ${prompt}
 
 Please modify the objection according to the user's instruction while keeping it legally sound. Return only the modified objection, nothing else.`);
       const editedText = result.response.text().trim();
-      
+
       if (editedText) {
-        setSuggestedObjections(prevObjections => 
-          prevObjections.map(o => 
-            o.id === aiEditingObjectionId 
-              ? { ...o, objection: editedText } 
+        setSuggestedObjections(prevObjections =>
+          prevObjections.map(o =>
+            o.id === aiEditingObjectionId
+              ? { ...o, objection: editedText }
               : o
           )
         );
-        
+
         toast({
           title: "Objection Updated",
           description: "AI has successfully edited the objection.",
@@ -1059,7 +1059,7 @@ Please modify the objection according to the user's instruction while keeping it
       });
       return;
     }
-    
+
     setIsGeneratingStrategy(true);
     try {
       // First, generate narratives if not already generated
@@ -1068,15 +1068,15 @@ Please modify the objection according to the user's instruction while keeping it
           question: cr.question,
           clientResponse: cr.response
         }));
-        
+
         const result = await generateObjectionsAndNarratives(
           questionsWithResponses,
           caseData?.complaint_data as unknown as ComplaintInformation | undefined,
           caseType || detectedCaseType
         );
-        
+
         setCaseNarratives(result.narratives);
-        
+
         // Auto-select the strongest narrative
         const strongestNarrative = result.narratives.find(n => n.strength === 'strong');
         if (strongestNarrative) {
@@ -1084,16 +1084,16 @@ Please modify the objection according to the user's instruction while keeping it
         } else if (result.narratives.length > 0) {
           setSelectedNarrative(result.narratives[0].id);
         }
-        
+
         toast({
           title: "Narratives Generated",
           description: `Generated ${result.narratives.length} case narrative strategies.`,
         });
-        
+
         setIsGeneratingStrategy(false);
         return;
       }
-      
+
       // Generate multiple objections for each request
       const objectionsData: Record<string, {
         objections: string[];
@@ -1101,18 +1101,18 @@ Please modify the objection according to the user's instruction while keeping it
         useDirectAnswer: boolean;
         directAnswer: string;
       }> = {};
-      
+
       // Create the model once outside the loop
-      const model = genAI.getGenerativeModel({ 
+      const model = genAI.getGenerativeModel({
         model: geminiModel,
-        safetySettings 
+        safetySettings
       });
-      
+
       for (let i = 0; i < clientResponses.length; i++) {
         const response = clientResponses[i];
         const editedQuestion = editedQuestions.find(q => q.id === response.questionId);
         const originalQuestion = editedQuestion?.original || response.question;
-        
+
         // Generate 3 objection options for this request
         const objectionPromises = [1, 2, 3].map(async (optionNum) => {
           let focus, instructions;
@@ -1126,7 +1126,7 @@ Please modify the objection according to the user's instruction while keeping it
             focus = 'expert opinion and improper characterization';
             instructions = 'Focus on requests that call for expert opinion, legal conclusions, or improper characterizations.';
           }
-          
+
           const prompt = `You are a defense attorney. Draft ONE objection to this Request for Admission.
 
 REQUEST FOR ADMISSION: ${originalQuestion}
@@ -1151,19 +1151,19 @@ Objection. [Specific grounds]. Subject to and without waiving the foregoing obje
 
           const result = await model.generateContent(prompt);
           let text = result.response.text().trim();
-          
+
           // Clean up any extra formatting the AI might add
           text = text.replace(/^\*\*Option \d+:.*?\*\*\n*/i, '');
           text = text.replace(/^Okay,.*?:\n*/i, '');
           text = text.replace(/^Here (?:is|are).*?:\n*/i, '');
           text = text.replace(/^\*\*/g, '');
           text = text.replace(/\*\*$/g, '');
-          
+
           return text.trim();
         });
-        
+
         const objections = await Promise.all(objectionPromises);
-        
+
         objectionsData[`request_${i}`] = {
           objections: objections.filter(o => o),
           selectedObjectionIndex: null,
@@ -1171,9 +1171,9 @@ Objection. [Specific grounds]. Subject to and without waiving the foregoing obje
           directAnswer: ''
         };
       }
-      
+
       setRequestObjections(objectionsData);
-      
+
       toast({
         title: "Objections Generated",
         description: `Generated multiple objection options for ${clientResponses.length} requests.`,
@@ -1195,9 +1195,9 @@ Objection. [Specific grounds]. Subject to and without waiving the foregoing obje
     const response = clientResponses[requestIndex];
     const editedQuestion = editedQuestions.find(q => q.id === response.questionId);
     const originalQuestion = editedQuestion?.original || response.question;
-    
+
     setIsAiEditing(true);
-    
+
     try {
       const prompt = `You are a defense attorney drafting responses to Requests for Admissions.
 
@@ -1212,14 +1212,14 @@ Format your response as:
 
 Keep it concise and legally appropriate.`;
 
-      const model = genAI.getGenerativeModel({ 
+      const model = genAI.getGenerativeModel({
         model: geminiModel,
-        safetySettings 
+        safetySettings
       });
 
       const result = await model.generateContent(prompt);
       const answer = result.response.text().trim();
-      
+
       setRequestObjections(prev => ({
         ...prev,
         [`request_${requestIndex}`]: {
@@ -1229,7 +1229,7 @@ Keep it concise and legally appropriate.`;
           selectedObjectionIndex: null
         }
       }));
-      
+
       toast({
         title: "Direct Answer Generated",
         description: "AI has generated a direct response based on client's answer.",
@@ -1251,9 +1251,9 @@ Keep it concise and legally appropriate.`;
     const response = clientResponses[requestIndex];
     const editedQuestion = editedQuestions.find(q => q.id === response.questionId);
     const originalQuestion = editedQuestion?.original || response.question;
-    
+
     setIsAiEditing(true);
-    
+
     try {
       let focus, instructions;
       if (optionIndex === 0) {
@@ -1266,7 +1266,7 @@ Keep it concise and legally appropriate.`;
         focus = 'expert opinion and improper characterization';
         instructions = 'Focus on requests that call for expert opinion, legal conclusions, or improper characterizations.';
       }
-      
+
       const prompt = `You are a defense attorney. Draft ONE objection to this Request for Admission.
 
 REQUEST FOR ADMISSION: ${originalQuestion}
@@ -1286,26 +1286,26 @@ REQUIREMENTS:
 5. Be professional and legally sound
 6. Return ONLY the objection text - no preamble, no options list, no explanations`;
 
-      const model = genAI.getGenerativeModel({ 
+      const model = genAI.getGenerativeModel({
         model: geminiModel,
-        safetySettings 
+        safetySettings
       });
 
       const result = await model.generateContent(prompt);
       let text = result.response.text().trim();
-      
+
       // Clean up any extra formatting
       text = text.replace(/^\*\*Option \d+:.*?\*\*\n*/i, '');
       text = text.replace(/^Okay,.*?:\n*/i, '');
       text = text.replace(/^Here (?:is|are).*?:\n*/i, '');
       text = text.replace(/^\*\*/g, '');
       text = text.replace(/\*\*$/g, '');
-      
+
       setRequestObjections(prev => {
         const requestKey = `request_${requestIndex}`;
         const newObjections = [...prev[requestKey].objections];
         newObjections[optionIndex] = text.trim();
-        
+
         return {
           ...prev,
           [requestKey]: {
@@ -1314,7 +1314,7 @@ REQUIREMENTS:
           }
         };
       });
-      
+
       toast({
         title: "Objection Regenerated",
         description: `Option ${optionIndex + 1} has been regenerated.`,
@@ -1334,12 +1334,12 @@ REQUIREMENTS:
   // Save manually edited objection
   const saveEditedObjection = () => {
     if (!editingObjection) return;
-    
+
     setRequestObjections(prev => {
       const requestKey = `request_${editingObjection.requestIndex}`;
       const newObjections = [...prev[requestKey].objections];
       newObjections[editingObjection.optionIndex] = editingObjection.text;
-      
+
       return {
         ...prev,
         [requestKey]: {
@@ -1348,7 +1348,7 @@ REQUIREMENTS:
         }
       };
     });
-    
+
     setEditingObjection(null);
     toast({
       title: "Objection Updated",
@@ -1359,15 +1359,15 @@ REQUIREMENTS:
   // AI Edit individual objection option function
   const handleAiEditObjectionOption = async (prompt: string) => {
     if (!aiEditingObjectionOption) return;
-    
+
     const { requestIndex, optionIndex } = aiEditingObjectionOption;
     const requestKey = `request_${requestIndex}`;
     const currentObjection = requestObjections[requestKey]?.objections[optionIndex];
-    
+
     if (!currentObjection) return;
-    
+
     setIsAiEditing(true);
-    
+
     try {
       const fullPrompt = `You are a defense attorney editing an objection to a Request for Admission.
 
@@ -1380,22 +1380,22 @@ Modify the objection according to the user's instruction while keeping it legall
 
 Return ONLY the modified objection text, no preamble or explanation.`;
 
-      const model = genAI.getGenerativeModel({ 
+      const model = genAI.getGenerativeModel({
         model: geminiModel,
-        safetySettings 
+        safetySettings
       });
 
       const result = await model.generateContent(fullPrompt);
       let text = result.response.text().trim();
-      
+
       // Clean up formatting
       text = text.replace(/^\*\*/g, '');
       text = text.replace(/\*\*$/g, '');
-      
+
       setRequestObjections(prev => {
         const newObjections = [...prev[requestKey].objections];
         newObjections[optionIndex] = text;
-        
+
         return {
           ...prev,
           [requestKey]: {
@@ -1404,7 +1404,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
           }
         };
       });
-      
+
       toast({
         title: "Objection Edited",
         description: "AI has updated the objection based on your instructions.",
@@ -1425,14 +1425,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
   // Generate client-friendly questions when moving to step 5
   const generateQuestions = async () => {
     if (editedQuestions.length > 0) return; // Already generated
-    
+
     setIsGeneratingQuestions(true);
     try {
       // Combine all questions from all discovery documents
       const allQuestions = Object.values(extractedDiscoveryData)
         .filter(Boolean)
         .flatMap(data => data!.questions);
-      
+
       if (allQuestions.length === 0) {
         toast({
           title: "No Questions Found",
@@ -1441,14 +1441,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         });
         return;
       }
-      
+
       const clientQuestions = await generateClientQuestions(
         allQuestions,
         caseData?.complaint_data as unknown as ComplaintInformation | undefined
       );
-      
+
       setEditedQuestions(clientQuestions);
-      
+
       toast({
         title: "Questions Generated",
         description: `Generated ${clientQuestions.length} client-friendly questions.`,
@@ -1471,7 +1471,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
       // Check if any document has been uploaded OR if we have extracted data from saved documents
       const anyFile = Object.values(uploadedFiles).some(f => f !== null);
       const anyExtracted = Object.values(extractedDiscoveryData).some(d => d !== null);
-      
+
       if (!anyFile && !anyExtracted) {
         toast({
           title: "Missing documents",
@@ -1480,7 +1480,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         });
         return;
       }
-      
+
       // If we have files but no extracted data yet, wait for processing
       if (anyFile && !anyExtracted && !isExtracting) {
         toast({
@@ -1491,7 +1491,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         return;
       }
     }
-    
+
     if (activeStep === 2) {
       if (!caseType) {
         toast({
@@ -1502,7 +1502,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         return;
       }
     }
-    
+
     if (activeStep === 3) {
       // Step 3: Identify Client
       if (!selectedClient) {
@@ -1513,13 +1513,13 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         });
         return;
       }
-      
+
       // Generate questions when moving to step 4
       setActiveStep(4);
       await generateQuestions();
       return;
     }
-    
+
     if (activeStep === 5) {
       // Step 5: Wait for client responses
       if (!hasClientResponded) {
@@ -1530,13 +1530,13 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         });
         return;
       }
-      
+
       // Generate strategy when moving to step 6
       setActiveStep(6);
       await generateStrategyFromResponses();
       return;
     }
-    
+
     setActiveStep(prev => Math.min(prev + 1, 7));
   };
 
@@ -1555,7 +1555,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
     }
 
     setLoading(true);
-    
+
     try {
       // Update the questionnaire with new questions
       const { error } = await supabase
@@ -1566,9 +1566,9 @@ Return ONLY the modified objection text, no preamble or explanation.`;
           updated_at: new Date().toISOString()
         })
         .eq('id', activeQuestionnaire.id);
-      
+
       if (error) throw error;
-      
+
       // Update the client_responses table with new question texts
       for (const question of editedQuestions) {
         await supabase
@@ -1580,14 +1580,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
           .eq('questionnaire_id', activeQuestionnaire.id)
           .eq('question_id', question.id);
       }
-      
+
       setLoading(false);
       toast({
         title: "Questions Updated",
         description: "The questions have been successfully updated.",
         variant: "default",
       });
-      
+
       // Refetch the questionnaire
       await refetchQuestionnaire();
       setActiveStep(5);
@@ -1613,7 +1613,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
     }
 
     setLoading(true);
-    
+
     try {
       // Determine the discovery type from uploaded documents
       const discoveryTypes = [];
@@ -1621,15 +1621,15 @@ Return ONLY the modified objection text, no preamble or explanation.`;
       if (extractedDiscoveryData.requestsForAdmissions) discoveryTypes.push('Requests for Admissions');
       if (extractedDiscoveryData.requestsForProduction) discoveryTypes.push('Requests for Production');
       if (extractedDiscoveryData.specialInterrogatories) discoveryTypes.push('Special Interrogatories');
-      
+
       // Get the earliest deadline from all documents
       const deadlines = Object.values(extractedDiscoveryData)
         .filter(Boolean)
         .map(d => d?.responseDeadline)
         .filter(Boolean);
-      
+
       const earliestDeadline = deadlines.length > 0 ? deadlines.sort()[0] : null;
-      
+
       // Create the questionnaire
       const { data: questionnaire, error } = await supabase
         .from('client_questionnaires')
@@ -1648,9 +1648,9 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         })
         .select()
         .single();
-      
+
       if (error) throw error;
-      
+
       // Create empty response records for each question
       const responseRecords = editedQuestions.map(q => ({
         questionnaire_id: questionnaire.id,
@@ -1658,11 +1658,11 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         question_text: q.question,
         response_text: null,
       }));
-      
+
       const { error: responsesError } = await supabase
         .from('client_responses')
         .insert(responseRecords);
-      
+
       if (responsesError) {
         console.error("Error creating response records:", responsesError);
         // Continue anyway - records can be created when client starts answering
@@ -1672,7 +1672,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
       try {
         const clientDetails = await getClientDetails(selectedClient);
         if (clientDetails.phone) {
-          const loginLink = `${window.location.origin}/client-login`;
+          const loginLink = `https://doculaw.vercel.app/client-login`;
           const smsResult = await sendSms({
             to_phone: clientDetails.phone,
             message_type: 'questionnaire_sent',
@@ -1687,7 +1687,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
             deadline: earliestDeadline || undefined,
             login_link: loginLink,
           });
-          
+
           if (smsResult.success) {
             console.log('SMS notification sent:', smsResult);
           } else {
@@ -1699,7 +1699,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
       } catch (smsError) {
         console.warn('SMS notification error (non-blocking):', smsError);
       }
-      
+
       setLoading(false);
       toast({
         title: "Questionnaire Sent",
@@ -1726,10 +1726,10 @@ Return ONLY the modified objection text, no preamble or explanation.`;
       response: `[Client's detailed response to question ${index + 1}. This would be filled in by the actual client through their portal.]`,
       submittedAt: new Date().toISOString()
     }));
-    
+
     setClientResponses(mockResponses);
     setHasClientResponded(true);
-    
+
     toast({
       title: "Client Responses Received",
       description: `Received ${mockResponses.length} responses from client.`,
@@ -1756,7 +1756,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
     }
 
     setLoading(true);
-    
+
     try {
       // Build plain text for copy/download (no equal signs, with tabs)
       let documentContent = `DISCOVERY RESPONSES\n${caseData?.name || 'Case Name'}\nCase Number: ${caseData?.case_number || 'N/A'}\nGenerated: ${new Date().toLocaleDateString()}\n\n`;
@@ -1765,7 +1765,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         const editedQuestion = editedQuestions.find(q => q.id === response.questionId);
         const requestKey = `request_${index}`;
         const requestData = requestObjections[requestKey];
-        
+
         let selectedResponse = '';
         if (requestData) {
           if (requestData.useDirectAnswer) {
@@ -1774,13 +1774,13 @@ Return ONLY the modified objection text, no preamble or explanation.`;
             selectedResponse = requestData.objections[requestData.selectedObjectionIndex];
           }
         }
-        
+
         documentContent += `REQUEST FOR ADMISSION NO. ${index + 1}:\n\t${editedQuestion?.original || response.question}\n\nRESPONSE TO REQUEST FOR ADMISSION NO. ${index + 1}:\n\t${selectedResponse || 'No response selected'}\n\n`;
       });
 
       // Store in state to display
       setGeneratedDocument(documentContent);
-      
+
       toast({
         title: "Document Generated",
         description: "Your discovery response has been prepared.",
@@ -1881,7 +1881,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         </p>
                       </div>
                     </div>
-                    
+
                     {isExtracting && (
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center">
                         <Loader2 className="h-5 w-5 text-blue-500 mr-3 animate-spin flex-shrink-0" />
@@ -1922,9 +1922,9 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             )}
                             <div className="flex space-x-2">
                               {uploadedFiles.formInterrogatories && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => handleRegenerateExtraction('formInterrogatories')}
                                   disabled={isExtracting}
                                 >
@@ -1975,9 +1975,9 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             )}
                             <div className="flex space-x-2">
                               {uploadedFiles.requestsForAdmissions && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => handleRegenerateExtraction('requestsForAdmissions')}
                                   disabled={isExtracting}
                                 >
@@ -2028,9 +2028,9 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             )}
                             <div className="flex space-x-2">
                               {uploadedFiles.requestsForProduction && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => handleRegenerateExtraction('requestsForProduction')}
                                   disabled={isExtracting}
                                 >
@@ -2081,9 +2081,9 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             )}
                             <div className="flex space-x-2">
                               {uploadedFiles.specialInterrogatories && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => handleRegenerateExtraction('specialInterrogatories')}
                                   disabled={isExtracting}
                                 >
@@ -2106,7 +2106,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         )}
                       </div>
                     </div>
-                    
+
                     {/* Summary of extracted data */}
                     {Object.values(extractedDiscoveryData).some(d => d !== null) && (
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -2137,7 +2137,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         </div>
                       </div>
                     )}
-                    
+
                     <p className="text-xs text-gray-500">Supported formats: PDF, DOC, DOCX (max 25MB each). You may proceed after uploading any one category; additional categories can be added later.</p>
                   </div>
                 )}
@@ -2171,7 +2171,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             </div>
                           )}
                         </div>
-                        
+
                         {/* Show discovery document info */}
                         {Object.entries(extractedDiscoveryData).some(([_, data]) => data !== null) && (
                           <div className="mt-4 pt-4 border-t">
@@ -2193,7 +2193,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         )}
                       </div>
                     )}
-                    
+
                     <div className="space-y-3">
                       <Label htmlFor="case-type">Case Type</Label>
                       <Select value={caseType} onValueChange={setCaseType}>
@@ -2219,8 +2219,8 @@ Return ONLY the modified objection text, no preamble or explanation.`;
 
                     <div className="space-y-3">
                       <Label htmlFor="special-instructions">Special Instructions (Optional)</Label>
-                      <Textarea 
-                        id="special-instructions" 
+                      <Textarea
+                        id="special-instructions"
                         placeholder="Any special considerations or notes for this response"
                         rows={3}
                       />
@@ -2247,22 +2247,20 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                       <div className="space-y-4">
                         {caseClientDetails.map((client) => {
                           const displayName = client.fullName || `${client.first_name} ${client.last_name}`;
-                          
+
                           return (
-                            <div 
-                              key={client.id} 
-                              className={`flex items-center space-x-4 p-4 rounded-lg border ${
-                                selectedClient === client.id 
-                                  ? 'border-doculaw-500 bg-doculaw-50' 
+                            <div
+                              key={client.id}
+                              className={`flex items-center space-x-4 p-4 rounded-lg border ${selectedClient === client.id
+                                  ? 'border-doculaw-500 bg-doculaw-50'
                                   : 'border-gray-200 hover:border-doculaw-200'
-                              } cursor-pointer transition-colors`}
+                                } cursor-pointer transition-colors`}
                               onClick={() => setSelectedClient(client.id)}
                             >
-                              <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                                selectedClient === client.id 
-                                  ? 'bg-doculaw-100 text-doculaw-700' 
+                              <div className={`h-10 w-10 rounded-full flex items-center justify-center ${selectedClient === client.id
+                                  ? 'bg-doculaw-100 text-doculaw-700'
                                   : 'bg-gray-100 text-gray-700'
-                              }`}>
+                                }`}>
                                 {displayName.charAt(0).toUpperCase()}
                               </div>
                               <div className="flex-1">
@@ -2285,7 +2283,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         <p className="text-sm text-gray-500 mb-4">
                           Add a client to this case to send them the discovery questionnaire.
                         </p>
-                        <Button 
+                        <Button
                           variant="outline"
                           onClick={() => navigate(`/case/${caseId}`)}
                         >
@@ -2297,8 +2295,8 @@ Return ONLY the modified objection text, no preamble or explanation.`;
 
                     {caseClientDetails && caseClientDetails.length > 0 && (
                       <div className="pt-4 border-t">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           className="w-full"
                           onClick={() => navigate(`/case/${caseId}`)}
                         >
@@ -2336,12 +2334,12 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-600">No questions available.</p>
                         <p className="text-sm text-gray-500 mt-2">
-                          {activeQuestionnaire 
-                            ? "Questions are loading from the questionnaire..." 
+                          {activeQuestionnaire
+                            ? "Questions are loading from the questionnaire..."
                             : "Please go back to upload documents and generate questions."}
                         </p>
                         {!activeQuestionnaire && (
-                          <Button 
+                          <Button
                             onClick={() => setActiveStep(1)}
                             className="mt-4"
                           >
@@ -2367,7 +2365,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                               AI Edit All Questions
                             </Button>
                           </div>
-                          
+
                           {editedQuestions.map((q, index) => (
                             <div key={q.id} className="rounded-lg border overflow-hidden">
                               {editQuestionId === q.id ? (
@@ -2375,7 +2373,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                   <Label htmlFor={`edit-${q.id}`} className="font-medium mb-2 block">
                                     Edit Question {index + 1}
                                   </Label>
-                                  <Textarea 
+                                  <Textarea
                                     id={`edit-${q.id}`}
                                     value={editQuestionText}
                                     onChange={(e) => setEditQuestionText(e.target.value)}
@@ -2383,14 +2381,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                     className="mb-3"
                                   />
                                   <div className="flex justify-end space-x-2">
-                                    <Button 
-                                      variant="outline" 
+                                    <Button
+                                      variant="outline"
                                       size="sm"
                                       onClick={handleCancelEdit}
                                     >
                                       Cancel
                                     </Button>
-                                    <Button 
+                                    <Button
                                       size="sm"
                                       onClick={handleSaveQuestion}
                                     >
@@ -2425,16 +2423,16 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                   </div>
                                   <div className="bg-gray-50 px-4 py-2 border-t flex justify-end space-x-2">
                                     {q.edited && (
-                                      <Button 
-                                        variant="ghost" 
+                                      <Button
+                                        variant="ghost"
                                         size="sm"
                                         onClick={() => handleResetQuestion(q.id)}
                                       >
                                         Reset
                                       </Button>
                                     )}
-                                    <Button 
-                                      variant="ghost" 
+                                    <Button
+                                      variant="ghost"
                                       size="sm"
                                       onClick={() => handleAiEditQuestion(q.id)}
                                       disabled={isAiEditing}
@@ -2442,8 +2440,8 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                       <Sparkles className="h-3.5 w-3.5 mr-1" />
                                       AI Edit
                                     </Button>
-                                    <Button 
-                                      variant="ghost" 
+                                    <Button
+                                      variant="ghost"
                                       size="sm"
                                       onClick={() => handleEditQuestion(q.id)}
                                     >
@@ -2463,7 +2461,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             Preview Questionnaire
                           </Button>
                           {activeQuestionnaire ? (
-                            <Button 
+                            <Button
                               className="bg-doculaw-500 hover:bg-doculaw-600"
                               onClick={handleUpdateQuestions}
                               disabled={loading}
@@ -2481,7 +2479,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                               )}
                             </Button>
                           ) : (
-                            <Button 
+                            <Button
                               className="bg-doculaw-500 hover:bg-doculaw-600"
                               onClick={handleSendToClient}
                               disabled={loading}
@@ -2516,7 +2514,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             <p className="font-medium text-blue-800">Questionnaire Sent Successfully</p>
                             <p className="text-sm text-blue-700 mt-1">
                               The questionnaire has been sent to {
-                                caseClientDetails?.find(c => c.id === selectedClient)?.fullName || 
+                                caseClientDetails?.find(c => c.id === selectedClient)?.fullName ||
                                 "the client"
                               }. Waiting for their responses...
                             </p>
@@ -2552,8 +2550,8 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         <div className="rounded-lg border p-4 bg-gray-50">
                           <div className="flex items-center justify-between mb-4">
                             <h3 className="font-medium">Response Status</h3>
-                            <Badge 
-                              variant="outline" 
+                            <Badge
+                              variant="outline"
                               className={
                                 activeQuestionnaire?.status === 'in_progress'
                                   ? 'bg-blue-50 text-blue-700 border-blue-200'
@@ -2564,14 +2562,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             </Badge>
                           </div>
                           <p className="text-sm text-gray-600 mb-4">
-                            The client will receive an email notification with a link to complete the questionnaire. 
+                            The client will receive an email notification with a link to complete the questionnaire.
                             You'll be notified once they submit their responses.
                           </p>
                           {activeQuestionnaire && (
                             <>
-                              <Progress 
-                                value={(activeQuestionnaire.completed_questions / activeQuestionnaire.total_questions) * 100} 
-                                className="h-2 mb-2" 
+                              <Progress
+                                value={(activeQuestionnaire.completed_questions / activeQuestionnaire.total_questions) * 100}
+                                className="h-2 mb-2"
                               />
                               <p className="text-xs text-gray-500">
                                 {activeQuestionnaire.completed_questions} of {activeQuestionnaire.total_questions} questions answered
@@ -2588,7 +2586,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
 
                         {/* Send Reminder SMS */}
                         <div className="border-t pt-4">
-                          <Button 
+                          <Button
                             onClick={async () => {
                               try {
                                 const clientDetails = await getClientDetails(selectedClient);
@@ -2596,9 +2594,9 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                   toast({ title: "No Phone Number", description: "This client has no phone number on file.", variant: "destructive" });
                                   return;
                                 }
-                                const loginLink = `${window.location.origin}/client-login`;
-                                const remaining = activeQuestionnaire 
-                                  ? activeQuestionnaire.total_questions - activeQuestionnaire.completed_questions 
+                                const loginLink = `https://doculaw.vercel.app/client-login`;
+                                const remaining = activeQuestionnaire
+                                  ? activeQuestionnaire.total_questions - activeQuestionnaire.completed_questions
                                   : editedQuestions.length;
                                 const result = await sendSms({
                                   to_phone: clientDetails.phone,
@@ -2696,12 +2694,12 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             Copy All
                           </Button>
                         </div>
-                        
+
                         <div className="space-y-3 max-h-[400px] overflow-y-auto border rounded-lg">
                           {clientResponses.map((response, index) => {
                             // Find the corresponding edited question to get the original
                             const editedQuestion = editedQuestions.find(q => q.id === response.questionId);
-                            
+
                             return (
                               <div key={response.id} className="border-b last:border-0">
                                 <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
@@ -2730,13 +2728,13 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                       </div>
                                     </div>
                                   )}
-                                  
+
                                   {/* Simplified Question Sent to Client */}
                                   <div>
                                     <p className="text-xs text-gray-500 mb-1">Question Sent to Client:</p>
                                     <p className="text-sm text-gray-900">{response.question}</p>
                                   </div>
-                                  
+
                                   {/* Client Answer */}
                                   <div>
                                     <p className="text-xs text-gray-500 mb-1">Client's Answer:</p>
@@ -2758,14 +2756,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         <div className="text-center">
                           <Loader2 className="h-12 w-12 animate-spin text-doculaw-500 mx-auto mb-4" />
                           <p className="text-gray-600">
-                            {caseNarratives.length === 0 
-                              ? 'Generating case narratives...' 
+                            {caseNarratives.length === 0
+                              ? 'Generating case narratives...'
                               : 'Generating objections...'
                             }
                           </p>
                           <p className="text-sm text-gray-500 mt-2">
-                            {caseNarratives.length === 0 
-                              ? 'Analyzing client responses to create strategic narratives' 
+                            {caseNarratives.length === 0
+                              ? 'Analyzing client responses to create strategic narratives'
                               : `Creating 3 objection options for ${clientResponses.length} requests`
                             }
                           </p>
@@ -2793,13 +2791,12 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             </p>
                             <div className="space-y-3">
                               {caseNarratives.map((narrative) => (
-                                <div 
+                                <div
                                   key={narrative.id}
-                                  className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                                    selectedNarrative === narrative.id
+                                  className={`p-4 rounded-lg border cursor-pointer transition-colors ${selectedNarrative === narrative.id
                                       ? 'border-doculaw-500 bg-doculaw-50 ring-2 ring-doculaw-200'
                                       : 'border-gray-200 hover:border-doculaw-200'
-                                  }`}
+                                    }`}
                                   onClick={() => setSelectedNarrative(narrative.id)}
                                 >
                                   <div className="flex items-start justify-between mb-2">
@@ -2809,14 +2806,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                       )}
                                       <h4 className="font-medium text-gray-900">{narrative.title}</h4>
                                     </div>
-                                    <Badge 
+                                    <Badge
                                       variant="outline"
                                       className={
                                         narrative.strength === 'strong'
                                           ? 'bg-green-50 text-green-700 border-green-200'
                                           : narrative.strength === 'moderate'
-                                          ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                                          : 'bg-gray-50 text-gray-700 border-gray-200'
+                                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                            : 'bg-gray-50 text-gray-700 border-gray-200'
                                       }
                                     >
                                       {narrative.strength.charAt(0).toUpperCase() + narrative.strength.slice(1)}
@@ -2891,15 +2888,15 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                               {clientResponses.map((response, index) => {
                                 const requestKey = `request_${index}`;
                                 const requestData = requestObjections[requestKey];
-                                
+
                                 if (!requestData) return null;
-                                
+
                                 // Find the original legal question
-                                const editedQuestion = editedQuestions.find(q => 
-                                  q.question === response.question || 
+                                const editedQuestion = editedQuestions.find(q =>
+                                  q.question === response.question ||
                                   q.id === `q_${index + 1}`
                                 );
-                                
+
                                 return (
                                   <div key={requestKey} className="rounded-lg border border-gray-300 overflow-hidden">
                                     {/* Header */}
@@ -2909,7 +2906,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                         Request for Admission No. {index + 1}
                                       </h4>
                                     </div>
-                                    
+
                                     <div className="p-4 space-y-4">
                                       {/* Original Legal Question (Discovery Request) */}
                                       {editedQuestion?.original && (
@@ -2923,7 +2920,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                           </div>
                                         </div>
                                       )}
-                                      
+
                                       {/* Question Sent to Client */}
                                       <div>
                                         <p className="text-xs font-medium text-gray-600 mb-2">Question Sent to Client:</p>
@@ -2931,7 +2928,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                           {response.question}
                                         </div>
                                       </div>
-                                      
+
                                       {/* Client Response */}
                                       <div>
                                         <p className="text-xs font-medium text-gray-600 mb-2">Client's Response:</p>
@@ -2939,7 +2936,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                           {response.response || <span className="text-gray-400 italic">No answer provided</span>}
                                         </div>
                                       </div>
-                                      
+
                                       {/* Response Options */}
                                       <div className="space-y-3 pt-2">
                                         <div className="flex items-center justify-between">
@@ -2948,7 +2945,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                             {requestData.useDirectAnswer ? 'Direct Answer' : requestData.selectedObjectionIndex !== null ? `Objection ${requestData.selectedObjectionIndex + 1}` : 'Not Selected'}
                                           </Badge>
                                         </div>
-                                        
+
                                         {/* Objection Options */}
                                         <div className="space-y-2">
                                           <p className="text-xs font-medium text-purple-700 flex items-center gap-1">
@@ -2956,15 +2953,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                             Objection Options (Choose One):
                                           </p>
                                           {requestData.objections.map((objection, objIndex) => (
-                                            <div 
+                                            <div
                                               key={objIndex}
-                                              className={`group rounded-lg border-2 transition-all ${
-                                                requestData.selectedObjectionIndex === objIndex && !requestData.useDirectAnswer
+                                              className={`group rounded-lg border-2 transition-all ${requestData.selectedObjectionIndex === objIndex && !requestData.useDirectAnswer
                                                   ? 'border-purple-500 bg-purple-50 shadow-sm'
                                                   : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50/30'
-                                              }`}
+                                                }`}
                                             >
-                                              <div 
+                                              <div
                                                 className="p-3 cursor-pointer"
                                                 onClick={() => {
                                                   setRequestObjections(prev => ({
@@ -2978,11 +2974,10 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                                 }}
                                               >
                                                 <div className="flex items-start gap-3">
-                                                  <div className={`mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                                                    requestData.selectedObjectionIndex === objIndex && !requestData.useDirectAnswer
+                                                  <div className={`mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${requestData.selectedObjectionIndex === objIndex && !requestData.useDirectAnswer
                                                       ? 'border-purple-500 bg-purple-500'
                                                       : 'border-gray-300 group-hover:border-purple-400'
-                                                  }`}>
+                                                    }`}>
                                                     {requestData.selectedObjectionIndex === objIndex && !requestData.useDirectAnswer && (
                                                       <div className="h-2 w-2 rounded-full bg-white"></div>
                                                     )}
@@ -3078,7 +3073,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                             </div>
                                           ))}
                                         </div>
-                                        
+
                                         {/* Divider */}
                                         <div className="relative py-2">
                                           <div className="absolute inset-0 flex items-center">
@@ -3088,19 +3083,18 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                             <span className="bg-white px-2 text-gray-500 font-medium">OR</span>
                                           </div>
                                         </div>
-                                        
+
                                         {/* Direct Answer Option */}
                                         <div className="space-y-2">
                                           <p className="text-xs font-medium text-green-700 flex items-center gap-1">
                                             <Check className="h-3 w-3" />
                                             Direct Answer (Admit/Deny):
                                           </p>
-                                          <div 
-                                            className={`group p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                                              requestData.useDirectAnswer
+                                          <div
+                                            className={`group p-3 rounded-lg border-2 cursor-pointer transition-all ${requestData.useDirectAnswer
                                                 ? 'border-green-500 bg-green-50 shadow-sm'
                                                 : 'border-gray-200 hover:border-green-300 hover:bg-green-50/30'
-                                            }`}
+                                              }`}
                                             onClick={() => {
                                               if (!requestData.directAnswer) {
                                                 // If no answer yet, generate it
@@ -3117,11 +3111,10 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                             }}
                                           >
                                             <div className="flex items-start gap-3">
-                                              <div className={`mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                                                requestData.useDirectAnswer
+                                              <div className={`mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${requestData.useDirectAnswer
                                                   ? 'border-green-500 bg-green-500'
                                                   : 'border-gray-300 group-hover:border-green-400'
-                                              }`}>
+                                                }`}>
                                                 {requestData.useDirectAnswer && (
                                                   <div className="h-2 w-2 rounded-full bg-white"></div>
                                                 )}
@@ -3162,16 +3155,16 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                         </div>
                                       </div>
                                     </div>
-                                    
+
                                     {/* Action Buttons */}
                                     <div className="bg-gray-50 px-4 py-3 border-t flex justify-end space-x-2">
-                                      <Button 
-                                        variant="ghost" 
+                                      <Button
+                                        variant="ghost"
                                         size="sm"
                                         disabled={!requestData.useDirectAnswer && requestData.selectedObjectionIndex === null}
                                         onClick={() => {
-                                          const selectedResponse = requestData.useDirectAnswer 
-                                            ? requestData.directAnswer 
+                                          const selectedResponse = requestData.useDirectAnswer
+                                            ? requestData.directAnswer
                                             : requestData.objections[requestData.selectedObjectionIndex || 0];
                                           const text = `REQUEST FOR ADMISSION NO. ${index + 1}:\n${editedQuestion?.original}\n\nRESPONSE TO REQUEST FOR ADMISSION NO. ${index + 1}:\n${selectedResponse}`;
                                           navigator.clipboard.writeText(text);
@@ -3217,7 +3210,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                       <div className="text-center py-8">
                         <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-600">Strategy not generated yet.</p>
-                        <Button 
+                        <Button
                           onClick={generateStrategyFromResponses}
                           className="mt-4"
                           disabled={!hasClientResponded}
@@ -3284,14 +3277,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="border rounded-lg overflow-hidden bg-white">
                           <div className="p-6 max-h-[600px] overflow-y-auto">
                             {clientResponses.map((response, index) => {
                               const editedQuestion = editedQuestions.find(q => q.id === response.questionId);
                               const requestKey = `request_${index}`;
                               const requestData = requestObjections[requestKey];
-                              
+
                               let selectedResponse = '';
                               if (requestData) {
                                 if (requestData.useDirectAnswer) {
@@ -3300,7 +3293,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                   selectedResponse = requestData.objections[requestData.selectedObjectionIndex];
                                 }
                               }
-                              
+
                               return (
                                 <div key={`doc_${index}`} className="mb-8 last:mb-0">
                                   <p className="font-bold underline text-gray-900 mb-1">
@@ -3364,7 +3357,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             <div className="flex justify-between items-center">
                               <span className="text-sm text-gray-600">Responses Selected:</span>
                               <Badge>
-                                {Object.values(requestObjections).filter(r => 
+                                {Object.values(requestObjections).filter(r =>
                                   r.useDirectAnswer || r.selectedObjectionIndex !== null
                                 ).length} of {clientResponses.length}
                               </Badge>
@@ -3372,7 +3365,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             <div className="flex justify-between items-center">
                               <span className="text-sm text-gray-600">Using Objections:</span>
                               <Badge variant="secondary">
-                                {Object.values(requestObjections).filter(r => 
+                                {Object.values(requestObjections).filter(r =>
                                   r.selectedObjectionIndex !== null && !r.useDirectAnswer
                                 ).length}
                               </Badge>
@@ -3380,7 +3373,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             <div className="flex justify-between items-center">
                               <span className="text-sm text-gray-600">Using Direct Answers:</span>
                               <Badge variant="secondary">
-                                {Object.values(requestObjections).filter(r => 
+                                {Object.values(requestObjections).filter(r =>
                                   r.useDirectAnswer
                                 ).length}
                               </Badge>
@@ -3402,7 +3395,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         )}
 
                         <div className="pt-4 border-t flex justify-end">
-                          <Button 
+                          <Button
                             className="bg-doculaw-500 hover:bg-doculaw-600"
                             onClick={handleGenerateDocument}
                             disabled={loading || Object.keys(requestObjections).length === 0}
@@ -3444,7 +3437,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                 )}
                 <div className="flex-1"></div>
                 {activeStep < 7 && (
-                  <Button 
+                  <Button
                     className="bg-doculaw-500 hover:bg-doculaw-600"
                     onClick={handleNextStep}
                     disabled={activeStep === 5 && !hasClientResponded}
@@ -3510,30 +3503,30 @@ Return ONLY the modified objection text, no preamble or explanation.`;
               This is how the questionnaire will appear to your client
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="max-h-[60vh] overflow-y-auto p-4 border rounded-lg space-y-6">
             <div className="text-center py-4 border-b">
               <img src="/lovable-uploads/0be20ac4-7ddb-481d-a2f7-35e04e74334b.png" alt="DocuLaw Logo" className="h-10 w-auto mx-auto mb-2" />
               <h2 className="text-xl font-bold">Discovery Questionnaire</h2>
               <p className="text-gray-500">{caseData?.name || "Case Name"} • Case #{caseData?.case_number || "Case Number"}</p>
             </div>
-            
+
             <div className="space-y-2">
               <h3 className="font-medium">Client Information</h3>
               <p className="text-gray-700">
-                {caseClientDetails?.find(c => c.id === selectedClient)?.fullName || 
-                 caseClientDetails?.find(c => c.id === selectedClient)?.email || 
-                 "Client Name"}
+                {caseClientDetails?.find(c => c.id === selectedClient)?.fullName ||
+                  caseClientDetails?.find(c => c.id === selectedClient)?.email ||
+                  "Client Name"}
               </p>
             </div>
-            
+
             <div className="space-y-4">
               <h3 className="font-medium">Instructions</h3>
               <p className="text-gray-700">
                 Please answer the following questions truthfully and completely. Your answers will be used to prepare responses to discovery requests in your case. If you're unsure about any question, please indicate that in your response.
               </p>
             </div>
-            
+
             <div className="space-y-6">
               <h3 className="font-medium">Questions</h3>
               {editedQuestions.map((q, index) => (
@@ -3547,7 +3540,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
               ))}
             </div>
           </div>
-          
+
           <DialogFooter className="flex justify-between">
             <Button variant="outline" onClick={() => setPreviewDialogOpen(false)}>
               Close Preview
@@ -3575,7 +3568,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
               Your preliminary discovery response has been generated successfully.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="py-4">
             <div className="rounded-lg border p-4 bg-gray-50">
               <h4 className="font-medium mb-1">{caseData?.name || "Case Name"} - Responses to First Set of Interrogatories</h4>
@@ -3592,16 +3585,16 @@ Return ONLY the modified objection text, no preamble or explanation.`;
               </Button>
             </div>
           </div>
-          
+
           <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button 
+            <Button
               variant="outline"
               className="sm:flex-1"
               onClick={() => setSuccessDialogOpen(false)}
             >
               Continue Editing
             </Button>
-            <Button 
+            <Button
               className="sm:flex-1 bg-doculaw-500 hover:bg-doculaw-600"
               onClick={handleSuccessContinue}
             >
@@ -3641,7 +3634,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         }}
         onConfirm={handleAiEditObjectionOption}
         originalText={
-          aiEditingObjectionOption 
+          aiEditingObjectionOption
             ? requestObjections[`request_${aiEditingObjectionOption.requestIndex}`]?.objections[aiEditingObjectionOption.optionIndex] || ''
             : ''
         }

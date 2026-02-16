@@ -46,23 +46,23 @@ export default function ClientLoginPage() {
     setIsSubmitting(true);
     try {
       console.log("Attempting client login with email:", data.email);
-      
+
       // Use the server-side function to verify and send magic link
       const { data: functionData, error: functionError } = await supabase.functions.invoke(
         "client-login",
         {
           body: {
             email: data.email,
-            redirectTo: `${window.location.origin}/auth/callback`,
+            redirectTo: "https://doculaw.vercel.app/auth/callback",
           },
         }
       );
-      
+
       if (functionError) {
         console.error("Function error:", functionError);
         throw new Error(functionError.message || "Unable to process login request");
       }
-      
+
       if (!functionData.success) {
         console.error("Client login failed:", functionData);
         toast({
@@ -72,7 +72,7 @@ export default function ClientLoginPage() {
         });
         return;
       }
-      
+
       // Success - show the success message
       setIsSubmitted(true);
       toast({

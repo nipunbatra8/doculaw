@@ -44,7 +44,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -73,8 +73,11 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
       });
       return;
     }
-    
+
     setIsSubmitting(true);
+    let createdClientId: string | null = null;
+    let createdAuthUserId: string | null = null;
+
     try {
       // Get lawyer name (needed for the email)
       const { data: profileData, error: profileError } = await supabase
@@ -84,7 +87,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
         .single();
 
       if (profileError) throw profileError;
-      
+
       const lawyerName = profileData?.name || "Your lawyer";
 
       // Store the client information in our clients table
@@ -102,10 +105,11 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
         .single();
 
       if (clientError) throw clientError;
+      createdClientId = clientData.id;
 
       // Generate a secure random password for the new user
       const tempPassword = Math.random().toString(36).slice(2) + Math.random().toString(36).toUpperCase().slice(2);
-      
+
       // Create a user account for the client in Supabase Auth
       const { data: authData, error: authError } = await supabase.functions.invoke("create-client-user", {
         body: {
@@ -122,6 +126,11 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
 
       if (authError) throw authError;
 
+      // Store auth user ID for potential rollback
+      if (authData?.user?.id) {
+        createdAuthUserId = authData.user.id;
+      }
+
       // Generate the magic link and send SMS
       const { data: inviteData, error: magicLinkError } = await supabase.functions.invoke("send-client-invitation", {
         body: {
@@ -130,7 +139,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
           lastName: data.lastName,
           lawyerName: lawyerName,
           clientId: clientData.id,
-          redirectTo: `${window.location.origin}/client-dashboard`,
+          redirectTo: `https://doculaw.vercel.app/client-dashboard`,
           phone: data.phone // Send phone number for SMS
         },
       });
@@ -144,9 +153,9 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
         } catch (clipboardError) {
           console.error("Failed to copy to clipboard:", clipboardError);
         }
-        
+
         console.info("Magic Link for client:", inviteData.magicLink);
-        
+
         // Store the link to local storage for later retrieval
         localStorage.setItem(`invitationLink_${clientData.id}`, inviteData.magicLink);
 
@@ -178,6 +187,22 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
       handleClose();
     } catch (error: unknown) {
       console.error("Error inviting client:", error);
+
+      // If we created a client record but the rest failed, delete it 
+      // to ensure we only have successful clients (atomicity-like behavior)
+      if (createdClientId) {
+        console.info("Rolling back client creation for ID:", createdClientId);
+        await supabase.from('clients').delete().eq('id', createdClientId);
+      }
+
+      // If we created an auth user, delete it too
+      if (createdAuthUserId) {
+        console.info("Rolling back auth user creation for ID:", createdAuthUserId);
+        await supabase.functions.invoke("delete-client-user", {
+          body: { userId: createdAuthUserId }
+        });
+      }
+
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to invite client. Please try again.",
@@ -197,7 +222,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
             Send an SMS invitation to add a new client to your client list. The client will receive a secure link to access their account. No cases or documents will be created automatically.
           </DialogDescription>
         </DialogHeader>
-        
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -214,7 +239,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="lastName"
@@ -229,7 +254,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
                 )}
               />
             </div>
-            
+
             <FormField
               control={form.control}
               name="email"
@@ -243,7 +268,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="phone"
@@ -260,7 +285,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
                 </FormItem>
               )}
             />
-            
+
             <DialogFooter className="sm:justify-end">
               <Button
                 type="button"
@@ -270,7 +295,7 @@ const ClientInviteModal = ({ open, onClose, onSuccess }: ClientInviteModalProps)
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 type="submit"
                 disabled={isSubmitting}
                 className="bg-doculaw-500 hover:bg-doculaw-600"

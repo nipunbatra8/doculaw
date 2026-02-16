@@ -16,7 +16,7 @@ const PaymentPage = () => {
     e.preventDefault();
     setIsSubmitting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/reset-password",
+      redirectTo: "https://doculaw.vercel.app/reset-password",
     });
     setIsSubmitting(false);
     if (!error) {
@@ -39,7 +39,7 @@ const PaymentPage = () => {
       <div className="bg-white shadow p-8 rounded-lg max-w-md w-full">
         <h1 className="text-3xl font-bold mb-2 text-center">Payment</h1>
         <p className="mb-6 text-center text-gray-600">
-          (Payments coming soon.)<br/>Enter your email to create your account. We'll email you a secure link after you check out.
+          (Payments coming soon.)<br />Enter your email to create your account. We'll email you a secure link after you check out.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
