@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import ClientLayout from "@/components/layout/ClientLayout";
 import { Button } from "@/components/ui/button";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle
 } from "@/components/ui/card";
 import {
   Tabs,
@@ -25,10 +25,10 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { 
-  FileText, 
-  CheckCircle2, 
-  Clock, 
+import {
+  FileText,
+  CheckCircle2,
+  Clock,
   PenLine,
   Eye,
   Loader2,
@@ -170,24 +170,25 @@ const ClientDashboardPage = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const completionNotifiedRef = useRef<Record<string, boolean>>({});
 
   // Get client record for current user
   const { data: clientRecord } = useQuery({
     queryKey: ['clientRecord', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      
+
       const { data, error } = await supabase
         .from('clients')
         .select('*')
         .eq('user_id', user.id)
         .single();
-      
+
       if (error) {
         console.error("Error fetching client record:", error);
         return null;
       }
-      
+
       return data;
     },
     enabled: !!user,
@@ -198,18 +199,18 @@ const ClientDashboardPage = () => {
     queryKey: ['clientQuestionnaires', clientRecord?.id],
     queryFn: async () => {
       if (!user || !clientRecord) return [];
-      
+
       const { data, error } = await supabase
         .from('client_questionnaires')
         .select('*')
         .eq('client_id', clientRecord.id)
         .order('sent_at', { ascending: false });
-      
+
       if (error) {
         console.error("Error fetching questionnaires:", error);
         return [];
       }
-      
+
       return data || [];
     },
     enabled: !!user && !!clientRecord,
@@ -220,18 +221,18 @@ const ClientDashboardPage = () => {
     queryKey: ['questionnaireResponses', selectedQuestionnaireId],
     queryFn: async () => {
       if (!selectedQuestionnaireId) return [];
-      
+
       const { data, error } = await supabase
         .from('client_responses')
         .select('*')
         .eq('questionnaire_id', selectedQuestionnaireId)
         .order('question_id');
-      
+
       if (error) {
         console.error("Error fetching responses:", error);
         return [];
       }
-      
+
       // Responses fetched
       return data || [];
     },
@@ -243,14 +244,14 @@ const ClientDashboardPage = () => {
   const activeQuestionnaire = questionnaires?.find(q => q.id === selectedQuestionnaireId);
   const currentQuestion = activeQuestionnaire?.questions?.[currentQuestionIndex];
   const currentResponse = questionnaireResponses?.find(r => r.question_id === currentQuestion?.id);
-  
+
   // Update currentAnswer when question changes
   useEffect(() => {
     if (currentResponse) {
       setCurrentAnswer(currentResponse.response_text || '');
     }
   }, [currentResponse]);
-  
+
   // Debug logging
   useEffect(() => {
     if (isModalOpen && activeQuestionnaire) {
@@ -273,12 +274,12 @@ const ClientDashboardPage = () => {
     document.body.appendChild(script);
   }, []);
   */
-  
+
   const saveAnswer = async () => {
     if (!currentQuestion || !selectedQuestionnaireId || !currentResponse) return;
-    
+
     setIsSaving(true);
-    
+
     try {
       // Save to database
       const { error } = await supabase
@@ -288,9 +289,9 @@ const ClientDashboardPage = () => {
           updated_at: new Date().toISOString()
         })
         .eq('id', currentResponse.id);
-      
+
       if (error) throw error;
-      
+
       // Refetch to update progress
       await refetchResponses();
       await refetchQuestionnaires();
@@ -315,23 +316,23 @@ const ClientDashboardPage = () => {
       });
       return;
     }
-    
+
     try {
       setIsRecording(true);
-      
+
       // Initialize speech recognition
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
-      
+
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
-      
+
       let finalTranscript = currentAnswer;
-      
+
       recognition.onresult = (event: any) => {
         let interimTranscript = '';
-        
+
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
             finalTranscript += (finalTranscript ? ' ' : '') + event.results[i][0].transcript;
@@ -339,43 +340,43 @@ const ClientDashboardPage = () => {
             interimTranscript += event.results[i][0].transcript;
           }
         }
-        
+
         // Update the answer with current transcription
         setCurrentAnswer(finalTranscript + interimTranscript);
       };
-      
+
       recognition.onend = () => {
         setIsRecording(false);
       };
-      
+
       recognition.onerror = (event: any) => {
         console.error('Speech recognition error', event.error);
         setIsRecording(false);
-        
+
         toast({
           title: "Speech recognition error",
           description: `Error: ${event.error}. Please try again.`,
           variant: "destructive",
         });
       };
-      
+
       recognition.start();
-      
+
       // Add event to stop recording
       const stopRecording = () => {
         recognition.stop();
         document.removeEventListener('click', stopRecording);
       };
-      
+
       // Stop recording when clicking elsewhere
       setTimeout(() => {
         document.addEventListener('click', stopRecording, { once: true });
       }, 100);
-      
+
     } catch (error) {
       console.error('Speech recognition error:', error);
       setIsRecording(false);
-      
+
       toast({
         title: "Speech recognition failed",
         description: "There was an error initializing speech recognition.",
@@ -554,9 +555,9 @@ const ClientDashboardPage = () => {
                         </div>
                       </CardContent>
                       <CardFooter className="border-t pt-4">
-                        <Button 
-                          variant="outline" 
-                          className="w-full" 
+                        <Button
+                          variant="outline"
+                          className="w-full"
                           size="sm"
                           onClick={() => {
                             setSelectedQuestionnaireId(questionnaire.id);
@@ -588,100 +589,100 @@ const ClientDashboardPage = () => {
             ) : questionnaires && questionnaires.length > 0 ? (
               <div className="grid gap-6 md:grid-cols-3">
                 {questionnaires.map(questionnaire => (
-                <Card key={questionnaire.id}>
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">{questionnaire.title}</CardTitle>
-                        <CardDescription>
-                          Case: {questionnaire.case_number || 'N/A'}
-                        </CardDescription>
-                      </div>
-                      <Badge 
-                        variant={questionnaire.status === "completed" ? "default" : "outline"}
-                        className={
-                          questionnaire.status === "completed" 
-                            ? "bg-green-100 text-green-700 hover:bg-green-100" 
-                            : questionnaire.status === "in_progress"
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : ""
-                        }
-                      >
-                        {questionnaire.status === 'completed' ? 'Completed' : questionnaire.status === 'in_progress' ? 'In Progress' : 'Pending'}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Sent:</span>
-                        <span>{new Date(questionnaire.sent_at).toLocaleDateString()}</span>
-                      </div>
-                      {questionnaire.response_deadline && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Due:</span>
-                          <span className={
-                            new Date(questionnaire.response_deadline) < new Date()
-                              ? 'text-red-600 font-medium'
-                              : ''
-                          }>
-                            {new Date(questionnaire.response_deadline).toLocaleDateString()}
-                          </span>
+                  <Card key={questionnaire.id}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-lg">{questionnaire.title}</CardTitle>
+                          <CardDescription>
+                            Case: {questionnaire.case_number || 'N/A'}
+                          </CardDescription>
                         </div>
-                      )}
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Progress:</span>
-                        <span>{questionnaire.completed_questions} of {questionnaire.total_questions}</span>
+                        <Badge
+                          variant={questionnaire.status === "completed" ? "default" : "outline"}
+                          className={
+                            questionnaire.status === "completed"
+                              ? "bg-green-100 text-green-700 hover:bg-green-100"
+                              : questionnaire.status === "in_progress"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : ""
+                          }
+                        >
+                          {questionnaire.status === 'completed' ? 'Completed' : questionnaire.status === 'in_progress' ? 'In Progress' : 'Pending'}
+                        </Badge>
                       </div>
-                      <div className="pt-2">
-                        <Progress 
-                          value={(questionnaire.completed_questions / questionnaire.total_questions) * 100} 
-                          className="h-2" 
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="border-t pt-4">
-                    {questionnaire.status === "completed" ? (
-                      <Button 
-                        variant="outline" 
-                        className="w-full" 
-                        size="sm"
-                        onClick={() => {
-                          setSelectedQuestionnaireId(questionnaire.id);
-                          setIsModalOpen(true);
-                        }}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Answers
-                      </Button>
-                    ) : (
-                      <Button 
-                        className="w-full bg-doculaw-500 hover:bg-doculaw-600" 
-                        size="sm"
-                        onClick={() => {
-                          setSelectedQuestionnaireId(questionnaire.id);
-                          setCurrentQuestionIndex(0);
-                          setIsModalOpen(true);
-                        }}
-                      >
-                        {questionnaire.completed_questions > 0 ? (
-                          <>
-                            <PenLine className="h-4 w-4 mr-2" />
-                            Continue
-                          </>
-                        ) : (
-                          <>
-                            <PenLine className="h-4 w-4 mr-2" />
-                            Start
-                          </>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Sent:</span>
+                          <span>{new Date(questionnaire.sent_at).toLocaleDateString()}</span>
+                        </div>
+                        {questionnaire.response_deadline && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Due:</span>
+                            <span className={
+                              new Date(questionnaire.response_deadline) < new Date()
+                                ? 'text-red-600 font-medium'
+                                : ''
+                            }>
+                              {new Date(questionnaire.response_deadline).toLocaleDateString()}
+                            </span>
+                          </div>
                         )}
-                      </Button>
-                    )}
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Progress:</span>
+                          <span>{questionnaire.completed_questions} of {questionnaire.total_questions}</span>
+                        </div>
+                        <div className="pt-2">
+                          <Progress
+                            value={(questionnaire.completed_questions / questionnaire.total_questions) * 100}
+                            className="h-2"
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="border-t pt-4">
+                      {questionnaire.status === "completed" ? (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedQuestionnaireId(questionnaire.id);
+                            setIsModalOpen(true);
+                          }}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Answers
+                        </Button>
+                      ) : (
+                        <Button
+                          className="w-full bg-doculaw-500 hover:bg-doculaw-600"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedQuestionnaireId(questionnaire.id);
+                            setCurrentQuestionIndex(0);
+                            setIsModalOpen(true);
+                          }}
+                        >
+                          {questionnaire.completed_questions > 0 ? (
+                            <>
+                              <PenLine className="h-4 w-4 mr-2" />
+                              Continue
+                            </>
+                          ) : (
+                            <>
+                              <PenLine className="h-4 w-4 mr-2" />
+                              Start
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
             ) : (
               <div className="text-center py-12">
                 <FileQuestion className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -706,7 +707,7 @@ const ClientDashboardPage = () => {
               <DialogHeader>
                 <DialogTitle>{activeQuestionnaire.title}</DialogTitle>
                 <DialogDescription>
-                  Case: {activeQuestionnaire.case_number} 
+                  Case: {activeQuestionnaire.case_number}
                   {activeQuestionnaire.response_deadline && (
                     <> • Due: {new Date(activeQuestionnaire.response_deadline).toLocaleDateString()}</>
                   )}
@@ -719,7 +720,7 @@ const ClientDashboardPage = () => {
                   <Progress value={(activeQuestionnaire.completed_questions / activeQuestionnaire.total_questions) * 100} className="h-2" />
                 </div>
               </DialogHeader>
-              
+
               {!activeQuestionnaire.questions || activeQuestionnaire.questions.length === 0 ? (
                 <div className="py-12 text-center text-gray-500">
                   <p>No questions found in this questionnaire.</p>
@@ -760,7 +761,7 @@ const ClientDashboardPage = () => {
                       </details>
                     )}
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <label className="font-medium text-sm">Your Answer:</label>
@@ -785,7 +786,7 @@ const ClientDashboardPage = () => {
                         )}
                       </Button>
                     </div>
-                    <Textarea 
+                    <Textarea
                       value={currentAnswer}
                       onChange={(e) => setCurrentAnswer(e.target.value)}
                       placeholder="Enter your answer here or use voice input..."
@@ -804,7 +805,7 @@ const ClientDashboardPage = () => {
                   </div>
                 </div>
               )}
-              
+
               <DialogFooter className="flex justify-between mt-6">
                 <Button
                   variant="outline"
@@ -821,7 +822,7 @@ const ClientDashboardPage = () => {
                 <Button
                   onClick={async () => {
                     await saveAnswer();
-                    
+
                     if (currentQuestionIndex < (activeQuestionnaire.total_questions - 1)) {
                       setCurrentQuestionIndex(currentQuestionIndex + 1);
                     } else if (activeQuestionnaire.status !== 'completed') {
@@ -838,13 +839,14 @@ const ClientDashboardPage = () => {
                           .eq('id', activeQuestionnaire.id);
 
                         // Notify the lawyer via SMS
-                        if (activeQuestionnaire.lawyer_id) {
+                        if (activeQuestionnaire.lawyer_id && !completionNotifiedRef.current[activeQuestionnaire.id]) {
+                          completionNotifiedRef.current[activeQuestionnaire.id] = true;
                           const { data: lawyerProfile } = await supabase
                             .from('profiles')
                             .select('phone, name')
                             .eq('id', activeQuestionnaire.lawyer_id)
                             .single();
-                          
+
                           if (lawyerProfile?.phone) {
                             const clientName = user?.user_metadata?.full_name || 'Your client';
                             sendSms({
@@ -857,7 +859,10 @@ const ClientDashboardPage = () => {
                               client_name: clientName,
                               case_name: activeQuestionnaire.case_name,
                               question_count: activeQuestionnaire.total_questions,
-                            }).catch(err => console.warn('Completion SMS error:', err));
+                            }).catch(err => {
+                              console.warn('Completion SMS error:', err);
+                              completionNotifiedRef.current[activeQuestionnaire.id] = false; // Reset on failure
+                            });
                           }
                         }
                       } catch (err) {

@@ -93,57 +93,13 @@ serve(async (req) => {
       )
     }
 
-    // Also send login link via SMS if phone number exists
-    let smsSent = false
-    const clientPhone = clientData[0].phone
-
-    if (clientPhone && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
-      try {
-        const smsBody = `DocuLaw: Your login link has been sent to ${normalizedEmail}. Check your email to sign in to your client portal.`
-
-        const twilioEndpoint = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`
-        const twilioResponse = await fetch(twilioEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`
-          },
-          body: new URLSearchParams({
-            'To': clientPhone,
-            'From': TWILIO_PHONE_NUMBER,
-            'Body': smsBody
-          })
-        })
-
-        if (twilioResponse.ok) {
-          smsSent = true
-          console.log(`SMS login notification sent to ${clientPhone}`)
-
-          // Log to sms_messages table
-          await supabase.from('sms_messages').insert({
-            client_id: clientData[0].id,
-            to_phone: clientPhone,
-            from_phone: TWILIO_PHONE_NUMBER,
-            message_body: smsBody,
-            message_type: 'login_link',
-            status: 'sent',
-            sent_at: new Date().toISOString(),
-          })
-        } else {
-          console.error('Twilio SMS failed:', await twilioResponse.text())
-        }
-      } catch (smsError) {
-        console.error('SMS send error (non-blocking):', smsError)
-      }
-    }
-
     // Return success response
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Magic link sent successfully',
         email: normalizedEmail,
-        sms_sent: smsSent
+        sms_sent: false
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )

@@ -482,25 +482,6 @@ const DiscoveryResponsePage = () => {
         };
 
         fetchResponses();
-
-        // Send completion notification to lawyer (one-time)
-        if (!completionNotifiedRef.current && user && profile?.phone) {
-          completionNotifiedRef.current = true;
-          const clientDetail = caseClientDetails?.find(c => c.id === selectedClient);
-          sendSms({
-            to_phone: profile.phone,
-            message_type: 'completion',
-            client_id: selectedClient || undefined,
-            lawyer_id: user.id,
-            case_id: caseId,
-            questionnaire_id: activeQuestionnaire.id,
-            client_name: clientDetail?.fullName || clientDetail?.first_name || 'Your client',
-            case_name: caseData?.name || 'your case',
-            question_count: activeQuestionnaire.total_questions,
-          }).then(result => {
-            if (result.success) console.log('Completion SMS sent to lawyer');
-          }).catch(err => console.warn('Completion SMS error:', err));
-        }
       }
     }
   }, [activeQuestionnaire]);
@@ -2252,14 +2233,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             <div
                               key={client.id}
                               className={`flex items-center space-x-4 p-4 rounded-lg border ${selectedClient === client.id
-                                  ? 'border-doculaw-500 bg-doculaw-50'
-                                  : 'border-gray-200 hover:border-doculaw-200'
+                                ? 'border-doculaw-500 bg-doculaw-50'
+                                : 'border-gray-200 hover:border-doculaw-200'
                                 } cursor-pointer transition-colors`}
                               onClick={() => setSelectedClient(client.id)}
                             >
                               <div className={`h-10 w-10 rounded-full flex items-center justify-center ${selectedClient === client.id
-                                  ? 'bg-doculaw-100 text-doculaw-700'
-                                  : 'bg-gray-100 text-gray-700'
+                                ? 'bg-doculaw-100 text-doculaw-700'
+                                : 'bg-gray-100 text-gray-700'
                                 }`}>
                                 {displayName.charAt(0).toUpperCase()}
                               </div>
@@ -2794,8 +2775,8 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                 <div
                                   key={narrative.id}
                                   className={`p-4 rounded-lg border cursor-pointer transition-colors ${selectedNarrative === narrative.id
-                                      ? 'border-doculaw-500 bg-doculaw-50 ring-2 ring-doculaw-200'
-                                      : 'border-gray-200 hover:border-doculaw-200'
+                                    ? 'border-doculaw-500 bg-doculaw-50 ring-2 ring-doculaw-200'
+                                    : 'border-gray-200 hover:border-doculaw-200'
                                     }`}
                                   onClick={() => setSelectedNarrative(narrative.id)}
                                 >
@@ -2956,8 +2937,8 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                             <div
                                               key={objIndex}
                                               className={`group rounded-lg border-2 transition-all ${requestData.selectedObjectionIndex === objIndex && !requestData.useDirectAnswer
-                                                  ? 'border-purple-500 bg-purple-50 shadow-sm'
-                                                  : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50/30'
+                                                ? 'border-purple-500 bg-purple-50 shadow-sm'
+                                                : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50/30'
                                                 }`}
                                             >
                                               <div
@@ -2975,8 +2956,8 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                               >
                                                 <div className="flex items-start gap-3">
                                                   <div className={`mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${requestData.selectedObjectionIndex === objIndex && !requestData.useDirectAnswer
-                                                      ? 'border-purple-500 bg-purple-500'
-                                                      : 'border-gray-300 group-hover:border-purple-400'
+                                                    ? 'border-purple-500 bg-purple-500'
+                                                    : 'border-gray-300 group-hover:border-purple-400'
                                                     }`}>
                                                     {requestData.selectedObjectionIndex === objIndex && !requestData.useDirectAnswer && (
                                                       <div className="h-2 w-2 rounded-full bg-white"></div>
@@ -3092,8 +3073,8 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                           </p>
                                           <div
                                             className={`group p-3 rounded-lg border-2 cursor-pointer transition-all ${requestData.useDirectAnswer
-                                                ? 'border-green-500 bg-green-50 shadow-sm'
-                                                : 'border-gray-200 hover:border-green-300 hover:bg-green-50/30'
+                                              ? 'border-green-500 bg-green-50 shadow-sm'
+                                              : 'border-gray-200 hover:border-green-300 hover:bg-green-50/30'
                                               }`}
                                             onClick={() => {
                                               if (!requestData.directAnswer) {
@@ -3112,8 +3093,8 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                           >
                                             <div className="flex items-start gap-3">
                                               <div className={`mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${requestData.useDirectAnswer
-                                                  ? 'border-green-500 bg-green-500'
-                                                  : 'border-gray-300 group-hover:border-green-400'
+                                                ? 'border-green-500 bg-green-500'
+                                                : 'border-gray-300 group-hover:border-green-400'
                                                 }`}>
                                                 {requestData.useDirectAnswer && (
                                                   <div className="h-2 w-2 rounded-full bg-white"></div>
