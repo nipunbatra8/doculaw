@@ -153,7 +153,7 @@ serve(async (req) => {
       type: 'magiclink',
       email,
       options: {
-        redirectTo: `${new URL(req.url).origin}/auth/callback?clientId=${clientId}`,
+        redirectTo: `https://doculaw.vercel.app/auth/callback?clientId=${clientId}`,
       },
     })
 
