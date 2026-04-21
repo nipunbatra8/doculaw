@@ -1,5 +1,5 @@
 import { Document, Paragraph, TextRun, HeadingLevel, Packer } from 'docx';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 
 export function generateSiDoc(extractedData: ComplaintInformation, interrogatories: string[], definitions: string[]) {
   const plaintiff = extractedData.plaintiff || 'PLAINTIFF';

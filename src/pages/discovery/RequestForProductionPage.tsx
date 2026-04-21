@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { ChevronLeft, FileText, Loader2, AlertCircle, Sparkles } from "lucide-react";
 
 // API Integration
-import { extractComplaintInformation, ComplaintInformation } from "@/integrations/gemini/client";
+import { extractComplaintInformation, ComplaintInformation } from "@/integrations/openai/client";
 
 // Discovery Components
 import DashboardLayout from "@/components/layout/DashboardLayout";

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Eye, RefreshCw, UploadCloud } from "lucide-react";
 import { Document as ComplaintDocumentType } from "./types";
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 import { CaseData } from './types';
 import FormInterrogatoriesPdfButton from './FormInterrogatoriesPdfButton';
 import RequestForAdmissionsPdfButton from './RequestForAdmissionsPdfButton';

@@ -61,7 +61,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { sendSms, getClientDetails } from "@/integrations/sms/client";
 
-// Import Gemini functions
+// Import OpenAI functions
 import {
   extractDiscoveryDocument,
   generateObjectionsAndNarratives,
@@ -69,10 +69,9 @@ import {
   DiscoveryDocumentData,
   ObjectionData,
   ComplaintInformation,
-  genAI,
-  geminiModel,
-  safetySettings,
-} from "@/integrations/gemini/client";
+  openai,
+  openaiModel,
+} from "@/integrations/openai/client";
 import { AIEditModal } from "@/components/discovery/AIEditModal";
 
 // Narrative interface
@@ -852,15 +851,22 @@ const DiscoveryResponsePage = () => {
     setIsAiEditing(true);
 
     try {
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
-      const result = await model.generateContent(`You are helping a lawyer prepare client-friendly discovery questions.
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [
+          {
+            role: 'user',
+            content: `You are helping a lawyer prepare client-friendly discovery questions.
 
 Original Question: ${question.question}
 
 User's Instruction: ${prompt}
 
-Please modify the question according to the user's instruction while keeping it clear and appropriate for a client to answer. Return only the modified question, nothing else.`);
-      const editedText = result.response.text().trim();
+Please modify the question according to the user's instruction while keeping it clear and appropriate for a client to answer. Return only the modified question, nothing else.`,
+          },
+        ],
+      });
+      const editedText = (result.choices[0]?.message?.content ?? '').trim();
 
       if (editedText) {
         setEditedQuestions(prevQuestions =>
@@ -895,17 +901,24 @@ Please modify the question according to the user's instruction while keeping it 
 
     try {
       const updatedQuestions = [];
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
 
       for (const question of editedQuestions) {
-        const result = await model.generateContent(`You are helping a lawyer prepare client-friendly discovery questions.
+        const result = await openai.chat.completions.create({
+          model: openaiModel,
+          messages: [
+            {
+              role: 'user',
+              content: `You are helping a lawyer prepare client-friendly discovery questions.
 
 Original Question: ${question.question}
 
 User's Instruction: ${prompt}
 
-Please modify the question according to the user's instruction while keeping it clear and appropriate for a client to answer. Return only the modified question, nothing else.`);
-        const editedText = result.response.text().trim();
+Please modify the question according to the user's instruction while keeping it clear and appropriate for a client to answer. Return only the modified question, nothing else.`,
+            },
+          ],
+        });
+        const editedText = (result.choices[0]?.message?.content ?? '').trim();
 
         if (editedText) {
           updatedQuestions.push({ ...question, question: editedText, edited: true });
@@ -940,15 +953,22 @@ Please modify the question according to the user's instruction while keeping it 
     setIsAiEditing(true);
 
     try {
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
-      const result = await model.generateContent(`You are helping a lawyer draft discovery objections.
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [
+          {
+            role: 'user',
+            content: `You are helping a lawyer draft discovery objections.
 
 Question: ${objection.question}
 
 Current Objection: ${objection.objection}
 
-Please generate a NEW alternative objection for this question. Make it legally sound and professionally written. Return only the new objection text, nothing else.`);
-      const newObjection = result.response.text().trim();
+Please generate a NEW alternative objection for this question. Make it legally sound and professionally written. Return only the new objection text, nothing else.`,
+          },
+        ],
+      });
+      const newObjection = (result.choices[0]?.message?.content ?? '').trim();
 
       if (newObjection) {
         setSuggestedObjections(prevObjections =>
@@ -991,8 +1011,12 @@ Please generate a NEW alternative objection for this question. Make it legally s
     setIsAiEditing(true);
 
     try {
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
-      const result = await model.generateContent(`You are helping a lawyer draft discovery objections.
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [
+          {
+            role: 'user',
+            content: `You are helping a lawyer draft discovery objections.
 
 Question: ${objection.question}
 
@@ -1000,8 +1024,11 @@ Current Objection: ${objection.objection}
 
 User's Instruction: ${prompt}
 
-Please modify the objection according to the user's instruction while keeping it legally sound. Return only the modified objection, nothing else.`);
-      const editedText = result.response.text().trim();
+Please modify the objection according to the user's instruction while keeping it legally sound. Return only the modified objection, nothing else.`,
+          },
+        ],
+      });
+      const editedText = (result.choices[0]?.message?.content ?? '').trim();
 
       if (editedText) {
         setSuggestedObjections(prevObjections =>
@@ -1083,12 +1110,6 @@ Please modify the objection according to the user's instruction while keeping it
         directAnswer: string;
       }> = {};
 
-      // Create the model once outside the loop
-      const model = genAI.getGenerativeModel({
-        model: geminiModel,
-        safetySettings
-      });
-
       for (let i = 0; i < clientResponses.length; i++) {
         const response = clientResponses[i];
         const editedQuestion = editedQuestions.find(q => q.id === response.questionId);
@@ -1130,8 +1151,11 @@ REQUIREMENTS:
 EXAMPLE FORMAT:
 Objection. [Specific grounds]. Subject to and without waiving the foregoing objections, Responding Party responds as follows: [Response]`;
 
-          const result = await model.generateContent(prompt);
-          let text = result.response.text().trim();
+          const result = await openai.chat.completions.create({
+            model: openaiModel,
+            messages: [{ role: 'user', content: prompt }],
+          });
+          let text = (result.choices[0]?.message?.content ?? '').trim();
 
           // Clean up any extra formatting the AI might add
           text = text.replace(/^\*\*Option \d+:.*?\*\*\n*/i, '');
@@ -1193,13 +1217,11 @@ Format your response as:
 
 Keep it concise and legally appropriate.`;
 
-      const model = genAI.getGenerativeModel({
-        model: geminiModel,
-        safetySettings
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: prompt }],
       });
-
-      const result = await model.generateContent(prompt);
-      const answer = result.response.text().trim();
+      const answer = (result.choices[0]?.message?.content ?? '').trim();
 
       setRequestObjections(prev => ({
         ...prev,
@@ -1267,13 +1289,11 @@ REQUIREMENTS:
 5. Be professional and legally sound
 6. Return ONLY the objection text - no preamble, no options list, no explanations`;
 
-      const model = genAI.getGenerativeModel({
-        model: geminiModel,
-        safetySettings
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: prompt }],
       });
-
-      const result = await model.generateContent(prompt);
-      let text = result.response.text().trim();
+      let text = (result.choices[0]?.message?.content ?? '').trim();
 
       // Clean up any extra formatting
       text = text.replace(/^\*\*Option \d+:.*?\*\*\n*/i, '');
@@ -1361,13 +1381,11 @@ Modify the objection according to the user's instruction while keeping it legall
 
 Return ONLY the modified objection text, no preamble or explanation.`;
 
-      const model = genAI.getGenerativeModel({
-        model: geminiModel,
-        safetySettings
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: fullPrompt }],
       });
-
-      const result = await model.generateContent(fullPrompt);
-      let text = result.response.text().trim();
+      let text = (result.choices[0]?.message?.content ?? '').trim();
 
       // Clean up formatting
       text = text.replace(/^\*\*/g, '');

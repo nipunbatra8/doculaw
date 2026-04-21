@@ -1,5 +1,5 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 
 export function generateRfpDoc(
   extractedData: ComplaintInformation,

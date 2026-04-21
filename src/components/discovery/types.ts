@@ -1,5 +1,5 @@
 
-import { ComplaintInformation } from "@/integrations/gemini/client";
+import { ComplaintInformation } from "@/integrations/openai/client";
 
 export interface Document {
   id: string;

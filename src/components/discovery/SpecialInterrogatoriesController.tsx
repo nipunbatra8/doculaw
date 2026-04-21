@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSISupabasePersistence } from '@/hooks/use-si-supabase-persistence';
 import { AIEditModal } from './AIEditModal';
 import SpecialInterrogatoriesPreview from './SpecialInterrogatoriesPreview';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 import SpecialInterrogatoriesDocxButton from './SpecialInterrogatoriesDocxButton';
 
 interface Props {

@@ -13,7 +13,7 @@ import { ChevronLeft, FileText, Sparkles, Loader2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 
 // API Integration
-import { extractComplaintInformation, ComplaintInformation, analyzeCheckboxesForFormInterrogatories } from "@/integrations/gemini/client";
+import { extractComplaintInformation, ComplaintInformation, analyzeCheckboxesForFormInterrogatories } from "@/integrations/openai/client";
 import { useCaseDocuments } from "@/hooks/use-case-documents";
 
 // Discovery Components
@@ -145,7 +145,7 @@ const FormInterrogatoriesPage = () => {
   const handleFileUploaded = async (fileUrl: string, fileText: string, fileName: string) => {
     setUploadedFileUrl(fileUrl);
     
-    // Extract information from the uploaded document using Gemini API
+    // Extract information from the uploaded document using OpenAI API
     setIsExtracting(true);
     
     try {
@@ -182,7 +182,7 @@ const FormInterrogatoriesPage = () => {
         setOldComplaintPath(null);
       }
 
-      // Call the Gemini API to extract information from the document text
+      // Call the OpenAI API to extract information from the document text
       const extractedInfo = await extractComplaintInformation(fileText);
       
       setExtractedData(extractedInfo);
@@ -275,7 +275,7 @@ const FormInterrogatoriesPage = () => {
             description: "AI is analyzing your complaint to determine relevant sections...",
           });
           
-          // Use Gemini to analyze which checkboxes should be selected
+          // Use OpenAI to analyze which checkboxes should be selected
           const enhancedDataWithCheckboxes = await analyzeCheckboxesForFormInterrogatories(
             dataForForm,
             complaintText || undefined
@@ -304,7 +304,7 @@ const FormInterrogatoriesPage = () => {
           }
         }
       } catch (analysisError) {
-        console.warn('Error analyzing form with Gemini:', analysisError);
+        console.warn('Error analyzing form with OpenAI:', analysisError);
         toast({
           title: 'Checkbox Analysis Limited',
           description: 'Could not fully analyze which checkboxes should be selected. Default sections will be used.',

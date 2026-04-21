@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { Packer } from 'docx';
 import { saveAs } from 'file-saver';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 import { generateSiDoc } from '@/integrations/docx/si-generator';
 
 interface SpecialInterrogatoriesDocxButtonProps {

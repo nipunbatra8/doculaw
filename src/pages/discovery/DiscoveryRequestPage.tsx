@@ -14,7 +14,7 @@ import { ChevronLeft, FileText, MessageSquare, HelpCircle, LinkIcon } from "luci
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 
 // API Integration
-import { extractComplaintInformation, ComplaintInformation } from "@/integrations/gemini/client";
+import { extractComplaintInformation, ComplaintInformation } from "@/integrations/openai/client";
 
 // Discovery Components
 import CaseInformationCard from "@/components/discovery/CaseInformationCard";
@@ -169,7 +169,7 @@ const DiscoveryRequestPage = () => {
   const handleFileUploaded = async (fileUrl: string, fileText: string, fileName: string) => {
     setUploadedFileUrl(fileUrl);
     
-    // Extract information from the uploaded document using Gemini API
+    // Extract information from the uploaded document using OpenAI API
     setIsExtracting(true);
     
     try {
@@ -208,7 +208,7 @@ const DiscoveryRequestPage = () => {
         setOldComplaintPath(null); // Clear the old path
       }
 
-      // Call the Gemini API to extract information from the document text
+      // Call the OpenAI API to extract information from the document text
       const extractedInfo = await extractComplaintInformation(fileText);
       
       setExtractedData(extractedInfo);
@@ -322,7 +322,7 @@ const DiscoveryRequestPage = () => {
     setIsGenerating(true);
     
     try {
-      // Generate selected documents using Gemini API
+      // Generate selected documents using OpenAI API
       // Skip 'form-interrogatories' as it's handled separately with PDF download
       const documentTypesToGenerate = selectedDocumentTypes.filter(
         typeId => typeId !== "form-interrogatories"

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { ComplaintInformation, generateSIWithAI, genAI, safetySettings, geminiModel } from '@/integrations/gemini/client';
+import { ComplaintInformation, generateSIWithAI, openai, openaiModel } from '@/integrations/openai/client';
 
 interface UseSISupabasePersistenceProps {
   caseId: string | undefined;
@@ -87,14 +87,15 @@ export function useSISupabasePersistence({ caseId, extractedData }: UseSISupabas
   };
 
   const editWithAI = async (prompt: string, originalText: string, type: 'interrogatory' | 'definition', index: number) => {
-    if (!genAI) { toast({ title: 'AI Edit Failed', description: 'Gemini API key is not configured.', variant: 'destructive' }); return null; }
+    if (!openai) { toast({ title: 'AI Edit Failed', description: 'OpenAI API key is not configured.', variant: 'destructive' }); return null; }
     setLoading(true);
     try {
       const aiPrompt = `You are a legal assistant. The user wants to edit a single ${type} based on their prompt.\n\nOriginal ${type}: "${originalText}"\nUser's instruction: "${prompt}"\n\nPlease provide the updated ${type} as a single string.\n\nIMPORTANT: Return ONLY the revised string, with no markdown, no quotes, and no additional text or explanation.`;
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
-      const result = await model.generateContent(aiPrompt);
-      const response = await result.response;
-      const updatedText = response.text().trim();
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: aiPrompt }],
+      });
+      const updatedText = (result.choices[0]?.message?.content ?? '').trim();
       if (!updatedText) throw new Error('AI returned an empty response.');
 
       if (type === 'interrogatory') {
@@ -117,7 +118,7 @@ export function useSISupabasePersistence({ caseId, extractedData }: UseSISupabas
   };
 
   const editAllWithAI = async (prompt: string, type: 'interrogatories' | 'definitions') => {
-    if (!genAI) { toast({ title: 'AI Edit Failed', description: 'Gemini API key is not configured.', variant: 'destructive' }); return [] as string[]; }
+    if (!openai) { toast({ title: 'AI Edit Failed', description: 'OpenAI API key is not configured.', variant: 'destructive' }); return [] as string[]; }
     setLoading(true);
     try {
       const currentData = type === 'interrogatories' ? (interrogatories || []) : (definitions || []);
@@ -125,10 +126,11 @@ export function useSISupabasePersistence({ caseId, extractedData }: UseSISupabas
     const currentList = currentData.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
     const defsNote = isDefinitions ? 'IMPORTANT FOR DEFINITIONS: Do not include numbers or bullet points in the definition text itself. Each definition should be a complete sentence starting with "The term" or similar.' : '';
     const aiPrompt = `You are a legal assistant. The user wants to edit the following list of ${type} based on their prompt: "${prompt}".\n\nCurrent ${type}:\n${currentList}\n\nPlease provide the updated list of ${type} in the same format.\n\n${defsNote}\n\nIMPORTANT: Return ONLY a valid JSON array of strings, with no markdown, no code blocks, and no additional text or explanation. The response should start with [ and end with ].\n\nExample format: ["First item", "Second item", "Third item"]`;
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
-      const result = await model.generateContent(aiPrompt);
-      const response = await result.response;
-      const text = response.text();
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: aiPrompt }],
+      });
+      const text = result.choices[0]?.message?.content ?? '';
 
       let jsonText = text.trim();
       if (jsonText.startsWith('```json')) {

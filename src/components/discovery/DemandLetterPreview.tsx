@@ -1,7 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, PDFViewer } from '@react-pdf/renderer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DemandLetterData } from '@/integrations/gemini/client';
+import { DemandLetterData } from '@/integrations/openai/client';
 
 const styles = StyleSheet.create({
   page: {

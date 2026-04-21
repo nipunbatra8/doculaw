@@ -1,5 +1,5 @@
 import { PDFDocument, rgb } from 'pdf-lib';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 
 /**
  * Utility function to inspect and log all form field names in a PDF
@@ -345,7 +345,7 @@ export const fillFormInterrogatories = async (
       'section360': ['CheckBox360', '360.0', 'Check360'],
       'section370': ['CheckBox370', '370.0', 'Check370'],
       
-      // Specific field mappings for Gemini analysis
+      // Specific field mappings for OpenAI analysis
       'Definitions': ['Definitions', 'Definition', 'Section4', 'Text36'],
       'GenBkgrd': ['GenBkgrd', 'GenBkgrd1', 'GenBkgrd[0]'],
       'PMEInjuries': ['PMEInjuries', 'PMEInjuries1', 'PMEInjuries[0]'],

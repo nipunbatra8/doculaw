@@ -17,7 +17,7 @@ import {
   DialogTitle, 
   DialogClose 
 } from '@/components/ui/dialog';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 import { 
   Document, 
   Page, 

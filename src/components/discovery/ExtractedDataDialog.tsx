@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ComplaintInformation } from "@/integrations/gemini/client";
+import { ComplaintInformation } from "@/integrations/openai/client";
 
 interface ExtractedDataDialogProps {
   open: boolean;

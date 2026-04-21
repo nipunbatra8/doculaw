@@ -9,7 +9,7 @@ import {
   DialogTitle 
 } from '@/components/ui/dialog';
 import { Eye, Download, Edit, Loader2 } from 'lucide-react';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 import { fillFormInterrogatories, downloadPdf } from '@/integrations/pdf/client';
 import { useToast } from '@/hooks/use-toast';
 

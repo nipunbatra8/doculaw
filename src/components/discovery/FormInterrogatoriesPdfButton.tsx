@@ -7,7 +7,7 @@ import {
   ComplaintInformation, 
   extractComplaintInformationFromFile,
   analyzeCheckboxesForFormInterrogatories
-} from '@/integrations/gemini/client';
+} from '@/integrations/openai/client';
 import { useToast } from '@/hooks/use-toast';
 import { useCaseDocuments } from '@/hooks/use-case-documents';
 import { supabase } from '@/integrations/supabase/client';
@@ -115,7 +115,7 @@ const FormInterrogatoriesPdfButton = ({
           const { base64, fileType, fileName } = await getComplaintFileAsBase64(caseId);
           console.log(`Retrieved complaint file: ${fileName}, type: ${fileType}`);
           const fileAnalysisData = await extractComplaintInformationFromFile(base64, fileType);
-          console.log('Gemini direct file analysis results:', fileAnalysisData);
+          console.log('OpenAI direct file analysis results:', fileAnalysisData);
           try {
             const textResponse = await fetch(`data:${fileType};base64,${base64}`);
             const blob = await textResponse.blob();
@@ -198,7 +198,7 @@ const FormInterrogatoriesPdfButton = ({
             console.log("Selected sections:", checkedSections);
             console.log("Selected specific fields:", checkedFields);
             if (dataForForm && 'explanation' in dataForForm && dataForForm.explanation) {
-              console.log("Explanation from Gemini:", dataForForm.explanation);
+              console.log("Explanation from OpenAI:", dataForForm.explanation);
             }
           }
           if (dataForForm.caseType) {
@@ -218,7 +218,7 @@ const FormInterrogatoriesPdfButton = ({
           }
         }
       } catch (analysisError) {
-        console.warn('Error analyzing form with Gemini:', analysisError);
+        console.warn('Error analyzing form with OpenAI:', analysisError);
         toast({
           title: 'Checkbox Analysis Limited',
           description: 'Could not fully analyze which checkboxes should be selected. Default sections will be used.',

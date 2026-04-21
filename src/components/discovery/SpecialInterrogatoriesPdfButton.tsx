@@ -27,7 +27,7 @@ import {
   PDFViewer,
   Font,
 } from '@react-pdf/renderer';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 import { format } from 'date-fns';
 
 // Register fonts

@@ -12,7 +12,7 @@ import {
 } from "@/integrations/openai/client";
 
 // Form Interrogatories Integration
-import { ComplaintInformation } from "@/integrations/gemini/client";
+import { ComplaintInformation } from "@/integrations/openai/client";
 import FormInterrogatoriesPdfButton from "@/components/discovery/FormInterrogatoriesPdfButton";
 
 // UI Components

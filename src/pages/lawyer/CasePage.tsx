@@ -40,7 +40,7 @@ import {
 import { format, parseISO } from "date-fns";
 import PdfEditor from "@/components/PdfEditor";
 import DocumentViewer from "@/components/discovery/DocumentViewer";
-import { ComplaintInformation } from "@/integrations/gemini/client";
+import { ComplaintInformation } from "@/integrations/openai/client";
 import ClientInviteModal from "@/components/clients/ClientInviteModal";
 import { sendSms } from "@/integrations/sms/client";
 

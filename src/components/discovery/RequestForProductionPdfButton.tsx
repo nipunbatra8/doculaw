@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRFPSupabasePersistence } from '@/hooks/use-rfp-supabase-persistence';
 import { AIEditModal } from './AIEditModal';
 import RequestForProductionPreview from './RequestForProductionPreview';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 
 interface RequestForProductionPdfButtonProps {
   extractedData: ComplaintInformation | null;

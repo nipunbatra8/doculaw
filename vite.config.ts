@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => ({
   define: {
     global: 'globalThis',
   },
+  envPrefix: ['VITE_', 'OPENAI_'],
   optimizeDeps: {
     include: ['docx'],
   },

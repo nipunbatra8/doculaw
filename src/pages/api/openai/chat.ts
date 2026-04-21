@@ -1,35 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import OpenAI from "openai";
 
-// Initialize the Gemini API with the API key from environment variables
-const apiKey = process.env.GEMINI_API_KEY;
-const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const apiKey = process.env.OPENAI_API_KEY;
+const openaiModel = "gpt-4.1-nano";
 
 if (!apiKey) {
-  console.error("Gemini API key is missing. Please check your environment variables.");
+  console.error("OpenAI API key is missing. Please check your environment variables.");
 }
 
-const genAI = new GoogleGenerativeAI(apiKey);
-
-// Safety settings to avoid inappropriate content
-const safetySettings = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-];
+const openai = new OpenAI({ apiKey });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -43,24 +22,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
-    // Get the last message from the array (user's prompt)
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage || !lastMessage.content) {
       return res.status(400).json({ error: 'No message content provided' });
     }
 
-    // Use Gemini's generative model
-    const model = genAI.getGenerativeModel({ 
-      model: geminiModel,
-      safetySettings,
+    const result = await openai.chat.completions.create({
+      model: openaiModel,
+      messages: [{ role: 'user', content: lastMessage.content }],
     });
 
-    const result = await model.generateContent(lastMessage.content);
-    const response = await result.response;
-    const text = response.text();
+    const text = result.choices[0]?.message?.content;
 
     if (!text) {
-      return res.status(500).json({ error: 'No response from Gemini' });
+      return res.status(500).json({ error: 'No response from OpenAI' });
     }
 
     res.status(200).json({
@@ -73,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ],
     });
   } catch (error) {
-    console.error('Gemini API error:', error);
+    console.error('OpenAI API error:', error);
     res.status(500).json({ error: 'Failed to get AI response' });
   }
 }

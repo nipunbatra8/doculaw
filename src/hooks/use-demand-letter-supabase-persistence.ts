@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { ComplaintInformation, generateDemandLetterWithAI, genAI, safetySettings, geminiModel } from '@/integrations/gemini/client';
+import { ComplaintInformation, generateDemandLetterWithAI, openai, openaiModel } from '@/integrations/openai/client';
 
 interface DemandLetterSections {
   header: string;
@@ -176,17 +176,19 @@ export function useDemandLetterSupabasePersistence({ caseId, extractedData }: Us
 
   const aiEditSection = async (key: keyof DemandLetterSections, instruction: string) => {
     if (!sections) return;
-    if (!genAI) {
-      toast({ title: 'AI Unavailable', description: 'Gemini key missing', variant: 'destructive' });
+    if (!openai) {
+      toast({ title: 'AI Unavailable', description: 'OpenAI key missing', variant: 'destructive' });
       return;
     }
     setLoading(true);
     try {
       const original = sections[key];
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
       const prompt = `You are revising a demand letter section. Instruction: ${instruction}\nOriginal Section (${key}):\n${original}\nReturn ONLY the improved revised text.`;
-      const result = await model.generateContent(prompt);
-      const updated = result.response.text().trim();
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const updated = (result.choices[0]?.message?.content ?? '').trim();
       updateSection(key, updated);
     } catch (e) {
       toast({ title: 'AI Edit Failed', description: e instanceof Error ? e.message : 'Unknown error', variant: 'destructive' });
@@ -195,16 +197,18 @@ export function useDemandLetterSupabasePersistence({ caseId, extractedData }: Us
 
   const aiEditAll = async (instruction: string) => {
     if (!sections) return;
-    if (!genAI) {
-      toast({ title: 'AI Unavailable', description: 'Gemini key missing', variant: 'destructive' });
+    if (!openai) {
+      toast({ title: 'AI Unavailable', description: 'OpenAI key missing', variant: 'destructive' });
       return;
     }
     setLoading(true);
     try {
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
       const prompt = `You are improving an entire demand letter. Instruction: ${instruction}\nCurrent JSON:\n${JSON.stringify(sections)}\nReturn ONLY JSON with the same keys.`;
-      const result = await model.generateContent(prompt);
-      let text = result.response.text().trim();
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      let text = (result.choices[0]?.message?.content ?? '').trim();
       if (text.startsWith('```')) text = text.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/,'');
       const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || text);
       setSections(parsed);

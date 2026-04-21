@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRFASupabasePersistence } from '@/hooks/use-rfa-supabase-persistence';
 import { AIEditModal } from './AIEditModal';
 import RequestForAdmissionsPreview from './RequestForAdmissionsPreview';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 
 interface Props {
   extractedData: ComplaintInformation | null;

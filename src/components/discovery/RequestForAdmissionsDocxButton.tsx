@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FileText, Download } from "lucide-react";
-import { ComplaintInformation } from "@/integrations/gemini/client";
+import { ComplaintInformation } from "@/integrations/openai/client";
 import { getAIResponseWithContext } from "@/integrations/openai/client";
 import { useToast } from "@/hooks/use-toast";
 import { 

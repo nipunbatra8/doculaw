@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from './use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { genAI, safetySettings, geminiModel } from '@/integrations/gemini/client';
+import { openai, openaiModel } from '@/integrations/openai/client';
 
 interface RFAPersistedData {
   id?: string;
@@ -306,10 +306,11 @@ Example:
   "admissions": ["Admit that you signed the agreement.", "Admit that the incident occurred on the specified date."]
 }`;
 
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
-      const result = await model.generateContent(generationPrompt);
-      const response = await result.response;
-      const text = response.text();
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: generationPrompt }],
+      });
+      const text = result.choices[0]?.message?.content ?? '';
 
       let jsonText = text.trim();
       if (jsonText.startsWith('```json')) {
@@ -352,10 +353,10 @@ Example:
     type: 'admission' | 'definition',
     index: number
   ): Promise<string | null> => {
-    if (!genAI) {
+    if (!openai) {
       toast({
         title: "AI Edit Failed",
-        description: "Gemini API key is not configured.",
+        description: "OpenAI API key is not configured.",
         variant: "destructive"
       });
       return null;
@@ -372,10 +373,11 @@ Please provide the updated ${type} as a single string.
 
 IMPORTANT: Return ONLY the revised string, with no markdown, no quotes, and no additional text or explanation.`;
 
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
-      const result = await model.generateContent(aiPrompt);
-      const response = await result.response;
-      const updatedText = response.text().trim();
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: aiPrompt }],
+      });
+      const updatedText = (result.choices[0]?.message?.content ?? '').trim();
 
       if (!updatedText) {
         throw new Error("AI returned an empty response.");
@@ -415,10 +417,10 @@ IMPORTANT: Return ONLY the revised string, with no markdown, no quotes, and no a
   }, [admissions, definitions, saveData, toast, isGenerated]);
 
   const editAllWithAI = useCallback(async (prompt: string, type: 'admissions' | 'definitions'): Promise<string[]> => {
-    if (!genAI) {
+    if (!openai) {
       toast({
         title: "AI Edit Failed",
-        description: "Gemini API key is not configured.",
+        description: "OpenAI API key is not configured.",
         variant: "destructive"
       });
       return [];
@@ -442,10 +444,11 @@ IMPORTANT: Return ONLY a valid JSON array of strings, with no markdown, no code 
 
 Example format: ["First item", "Second item", "Third item"]`;
 
-      const model = genAI.getGenerativeModel({ model: geminiModel, safetySettings });
-      const result = await model.generateContent(aiPrompt);
-      const response = await result.response;
-      const text = response.text();
+      const result = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [{ role: 'user', content: aiPrompt }],
+      });
+      const text = result.choices[0]?.message?.content ?? '';
 
       let jsonText = text.trim();
       if (jsonText.startsWith('```json')) {

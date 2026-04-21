@@ -1,4 +1,4 @@
-import { ComplaintInformation } from "@/integrations/gemini/client";
+import { ComplaintInformation } from "@/integrations/openai/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Save, X, Plus, FileText, Sparkles, RefreshCw } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";

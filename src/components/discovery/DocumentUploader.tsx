@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import pdfToText from 'react-pdftotext';
-import { extractComplaintInformation } from "@/integrations/gemini/client";
+import { extractComplaintInformation } from "@/integrations/openai/client";
 
 interface DocumentUploaderProps {
   onFileUploaded: (fileUrl: string, fileText: string, fileName: string) => void;
@@ -132,7 +132,7 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
       // If this is a complaint document and we have a case ID, process and store the complaint data
       if (fileType === 'complaint' && caseId) {
         try {
-          // Extract complaint information using the Gemini API
+          // Extract complaint information using the OpenAI API
           const complaintInfo = await extractComplaintInformation(extractedText);
           
           // Convert to JSON-compatible format for Supabase

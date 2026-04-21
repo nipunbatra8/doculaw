@@ -10,7 +10,7 @@ import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { saveAs } from 'file-saver';
 import { AIEditModal } from './AIEditModal';
 import { DemandLetterPreview } from './DemandLetterPreview';
-import { ComplaintInformation } from '@/integrations/gemini/client';
+import { ComplaintInformation } from '@/integrations/openai/client';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { addDocumentsToVectorStore, searchVectorStore } from '@/integrations/openai/client';
