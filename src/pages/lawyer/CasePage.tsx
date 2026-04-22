@@ -289,7 +289,7 @@ const CasePage = () => {
     if (!user || !caseId) return;
     
     try {
-      const { error } = await supabase
+      const { error, data: updatedRows } = await supabase
         .from('cases')
         .update({
           name: caseForm.name,
@@ -297,15 +297,20 @@ const CasePage = () => {
           status: caseForm.status,
           updated_at: new Date().toISOString()
         })
-        .eq('id', caseId);
-        
+        .eq('id', caseId)
+        .eq('user_id', user.id)
+        .select();
+
       if (error) throw error;
-      
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error('No rows were updated. You may not have permission to edit this case.');
+      }
+
       toast({
         title: "Case Updated",
         description: "The case details have been successfully updated.",
       });
-      
+
       setEditMode(false);
       refetch();
     } catch (error) {
@@ -326,15 +331,16 @@ const CasePage = () => {
       const { error } = await supabase
         .from('cases')
         .delete()
-        .eq('id', caseId);
-        
+        .eq('id', caseId)
+        .eq('user_id', user.id);
+
       if (error) throw error;
-      
+
       toast({
         title: "Case Deleted",
         description: "The case has been permanently deleted.",
       });
-      
+
       navigate('/dashboard');
     } catch (error) {
       console.error('Error deleting case:', error);
@@ -358,7 +364,8 @@ const CasePage = () => {
           status: 'Inactive',
           updated_at: new Date().toISOString()
         })
-        .eq('id', caseId);
+        .eq('id', caseId)
+        .eq('user_id', user.id);
         
       if (error) throw error;
       
@@ -391,7 +398,8 @@ const CasePage = () => {
           status: 'Active',
           updated_at: new Date().toISOString()
         })
-        .eq('id', caseId);
+        .eq('id', caseId)
+        .eq('user_id', user.id);
         
       if (error) throw error;
       
@@ -509,7 +517,8 @@ const CasePage = () => {
           clients: selectedClients,
           updated_at: new Date().toISOString()
         })
-        .eq('id', caseId);
+        .eq('id', caseId)
+        .eq('user_id', user.id);
         
       if (error) throw error;
       

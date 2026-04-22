@@ -119,26 +119,34 @@ export function useDemandLetterSupabasePersistence({ caseId, extractedData }: Us
       let dataToUse = extractedData;
       
       if (!dataToUse) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
         const { data: caseData, error: caseError } = await supabase
           .from('cases')
           .select('*')
           .eq('id', caseId)
+          .eq('user_id', user.id)
           .single();
-        
+
         if (caseError) throw caseError;
-        
-        // Create a minimal ComplaintInformation object from case data
-        dataToUse = {
-          plaintiff: caseData.client_name || 'Plaintiff',
-          defendant: 'Defendant',
-          incidentDate: caseData.incident_date || '',
-          incidentLocation: '',
-          parties: [],
-          allegations: [],
-          injuries: [],
-          damages: { medical: 0, property: 0, lostWages: 0, painAndSuffering: 0 },
-          causeOfAction: []
-        } as ComplaintInformation;
+
+        // If the case already has extracted complaint_data, prefer that.
+        const existing = (caseData as { complaint_data?: ComplaintInformation | null }).complaint_data;
+        if (existing && typeof existing === 'object') {
+          dataToUse = existing;
+        } else {
+          // Minimal stub so the AI at least has a name to anchor on; keeps
+          // the shape of ComplaintInformation valid.
+          dataToUse = {
+            plaintiff: 'Plaintiff',
+            defendant: 'Defendant',
+            caseNumber: (caseData as { case_number?: string }).case_number || '',
+            filingDate: '',
+            chargeDescription: '',
+            courtName: '',
+          };
+        }
       }
       
       toast({ title: 'Generating Demand Letter', description: 'Using AI + context...' });
