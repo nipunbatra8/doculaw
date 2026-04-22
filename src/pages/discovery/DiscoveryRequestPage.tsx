@@ -268,21 +268,24 @@ const DiscoveryRequestPage = () => {
 
   const handleConfirmExtractedData = () => {
     setShowExtractedDataDialog(false);
-    setCurrentStep(STEPS.SELECT_DOCUMENTS);
-    
-    // If this was a replacement, let's reload the page to ensure the document is refreshed
+    // Stay on UPLOAD_COMPLAINT so that <InitialScreen/> shows the generation
+    // hub (Form Interrogatories / Special Interrogatories / RFA / RFP /
+    // Demand Letter cards). The previous STEPS.SELECT_DOCUMENTS render path
+    // did not exist so users would end up on a blank page.
+    setCurrentStep(STEPS.UPLOAD_COMPLAINT);
+    setUploadedFileUrl(null);
+
     if (replacingComplaint) {
       toast({
         title: "Complaint Updated",
         description: "The complaint has been replaced and information updated.",
       });
-      
-      // Give a small delay to show the toast before refreshing
+
       setTimeout(() => {
         window.location.reload();
       }, 1500);
     }
-    
+
     setReplacingComplaint(false);
   };
 
