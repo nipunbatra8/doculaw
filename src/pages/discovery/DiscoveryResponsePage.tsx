@@ -30,6 +30,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -53,6 +58,8 @@ import {
   Copy,
   Bell,
   ClipboardList,
+  Clock,
+  ChevronDown,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -211,6 +218,9 @@ const DiscoveryResponsePage = () => {
   const [isGeneratingStrategy, setIsGeneratingStrategy] = useState(false);
 
   const [selectedClient, setSelectedClient] = useState("");
+  /** When set, this questionnaire drives steps 4–5; when null, the query picks the best open (or past) request for the selected client. */
+  const [activeQuestionnaireId, setActiveQuestionnaireId] = useState<string | null>(null);
+  const [reminderSendingId, setReminderSendingId] = useState<string | null>(null);
   const [editedQuestions, setEditedQuestions] = useState<Array<{
     id: string;
     question: string;
@@ -459,40 +469,83 @@ const DiscoveryResponsePage = () => {
     fetchCaseClientDetails();
   }, [fetchCaseClientDetails]);
 
+  // All open (pending / in progress) client questionnaires for this case — for the dashboard banner and focus selection
+  const { data: inProgressCaseQuestionnaires = [] } = useQuery<OpenClientQuestionnaire[]>({
+    queryKey: ['inProgressClientQuestionnaires', caseId, user?.id],
+    queryFn: async () => {
+      if (!user || !caseId) return [];
+      const { data, error } = await supabase
+        .from('client_questionnaires')
+        .select('*')
+        .eq('case_id', caseId)
+        .eq('lawyer_id', user.id)
+        .in('status', ['pending', 'in_progress'])
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching in-progress questionnaires:', error);
+        return [];
+      }
+      return (data || []) as OpenClientQuestionnaire[];
+    },
+    enabled: !!user && !!caseId,
+    refetchInterval: 5000,
+  });
+
   // Fetch client questionnaire and responses
   const { data: activeQuestionnaire, refetch: refetchQuestionnaire } = useQuery({
-    queryKey: ['clientQuestionnaire', caseId, selectedClient],
+    queryKey: ['clientQuestionnaire', caseId, selectedClient, activeQuestionnaireId, activeStep],
     queryFn: async () => {
-      if (!user || !caseId || !selectedClient) return null;
+      if (!user || !caseId) return null;
 
-      const { data, error } = await supabase
+      if (activeQuestionnaireId) {
+        const { data, error } = await supabase
+          .from('client_questionnaires')
+          .select('*')
+          .eq('id', activeQuestionnaireId)
+          .eq('case_id', caseId)
+          .eq('lawyer_id', user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error fetching questionnaire by id:', error);
+          return null;
+        }
+        return data;
+      }
+
+      if (!selectedClient) return null;
+
+      const { data: rows, error } = await supabase
         .from('client_questionnaires')
         .select('*')
         .eq('case_id', caseId)
         .eq('client_id', selectedClient)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(20);
 
       if (error) {
         console.error("Error fetching questionnaire:", error);
         return null;
       }
+      if (!rows?.length) return null;
 
-      return data;
+      const open = rows.find(
+        (r) => r.status === 'pending' || r.status === 'in_progress',
+      );
+      if (open) return open;
+      if (activeStep >= 5) {
+        return rows[0] ?? null;
+      }
+      return null;
     },
-    enabled: !!user && !!caseId && !!selectedClient,
+    enabled: !!user && !!caseId && (!!activeQuestionnaireId || !!selectedClient),
     refetchInterval: 5000, // Poll every 5 seconds for updates
   });
 
   // Update state when questionnaire status changes
   useEffect(() => {
     if (activeQuestionnaire) {
-      // Auto-navigate to step 5 if questionnaire exists and we're at early steps
-      if (activeStep < 4) {
-        setActiveStep(5);
-      }
-
       // Load the questions from the questionnaire into editedQuestions
       if (activeQuestionnaire.questions && activeQuestionnaire.questions.length > 0) {
         setEditedQuestions(activeQuestionnaire.questions);
@@ -559,6 +612,65 @@ const DiscoveryResponsePage = () => {
       return () => clearTimeout(timeoutId);
     }
   }, [user, caseId, caseType, detectedCaseType, suggestedObjections, selectedObjections, editedQuestions, selectedClient, clientResponses, hasClientResponded, caseNarratives, selectedNarrative, responseSuggestions, saveResponseData]);
+
+  const sendQuestionnaireReminder = useCallback(
+    async (q: {
+      id: string;
+      client_id: string;
+      total_questions: number;
+      completed_questions: number;
+      response_deadline: string | null;
+      questions?: OpenClientQuestionnaire['questions'] | null;
+    }) => {
+      if (!user?.id || !caseId) return;
+      setReminderSendingId(q.id);
+      try {
+        const clientDetails = await getClientDetails(q.client_id);
+        if (!clientDetails.phone) {
+          toast({
+            title: "No Phone Number",
+            description: "This client has no phone number on file.",
+            variant: "destructive",
+          });
+          return;
+        }
+        const remaining = q.total_questions - q.completed_questions;
+        const result = await sendSms({
+          to_phone: clientDetails.phone,
+          message_type: 'reminder',
+          client_id: q.client_id,
+          lawyer_id: user.id,
+          case_id: caseId,
+          questionnaire_id: q.id,
+          client_name: clientDetails.first_name || 'there',
+          lawyer_name: profile?.name || 'your attorney',
+          case_name: caseData?.name || 'your case',
+          question_count: (q.questions?.length ?? q.total_questions) || 0,
+          remaining_questions: remaining,
+          deadline: q.response_deadline || undefined,
+          login_link: 'https://doculaw.vercel.app/client-login',
+        });
+        if (result.success) {
+          toast({
+            title: "Reminder Sent",
+            description: `SMS reminder sent to ${clientDetails.first_name || 'the client'}.`,
+          });
+        } else {
+          toast({
+            title: "Reminder Failed",
+            description: result.error || "Could not send SMS.",
+            variant: "destructive",
+          });
+        }
+      } catch (err) {
+        console.error('Reminder SMS error:', err);
+        toast({ title: "Error", description: "Failed to send reminder.", variant: "destructive" });
+      } finally {
+        setReminderSendingId(null);
+      }
+    },
+    [user, caseId, caseData?.name, profile?.name, toast],
+  );
 
   // Loading state
   if (isLoadingCase || loadingSavedData) {
@@ -1625,6 +1737,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
 
       // Refetch the questionnaire
       await refetchQuestionnaire();
+      await queryClient.invalidateQueries({ queryKey: ['inProgressClientQuestionnaires', caseId, user.id] });
       setActiveStep(5);
     } catch (error) {
       console.error("Error updating questions:", error);
@@ -1692,6 +1805,9 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         .single();
 
       if (error) throw error;
+
+      setActiveQuestionnaireId(questionnaire.id);
+      await queryClient.invalidateQueries({ queryKey: ['inProgressClientQuestionnaires', caseId, user.id] });
 
       // Create empty response records for each question
       const responseRecords = editedQuestions.map(q => ({
@@ -1869,6 +1985,141 @@ Return ONLY the modified objection text, no preamble or explanation.`;
             </div>
           </div>
         </div>
+
+        {inProgressCaseQuestionnaires.length > 0 && (
+          <Card className="border-amber-200/80 bg-amber-50/40">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-3 flex-col sm:flex-row sm:items-center">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-amber-700" />
+                    In progress client requests
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Open questionnaires for this case. View questions, send SMS reminders, or start another request.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 border-doculaw-200"
+                  onClick={() => {
+                    setActiveQuestionnaireId(null);
+                    setActiveStep(1);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Add another request
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {inProgressCaseQuestionnaires.map((q) => {
+                const displayName =
+                  caseClientDetails?.find((c) => c.id === q.client_id)?.fullName ||
+                  `Client ${q.client_id.slice(0, 8)}…`;
+                const isFocused = activeQuestionnaireId === q.id;
+                return (
+                  <div
+                    key={q.id}
+                    className={`rounded-lg border p-4 ${
+                      isFocused ? "border-doculaw-400 bg-doculaw-50/50" : "border-gray-200 bg-white"
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 truncate" title={q.title}>
+                          {q.title}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-0.5">
+                          {displayName}
+                          {q.discovery_type ? ` · ${q.discovery_type}` : null}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          <Badge
+                            variant="outline"
+                            className={
+                              q.status === "in_progress"
+                                ? "bg-blue-50 text-blue-800 border-blue-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                            }
+                          >
+                            {q.status === "in_progress" ? "In progress" : "Pending"}
+                          </Badge>
+                          <span className="text-xs text-gray-500">
+                            {q.completed_questions} of {q.total_questions} answered
+                            {q.response_deadline
+                              ? ` · Due ${new Date(q.response_deadline).toLocaleDateString()}`
+                              : ""}
+                          </span>
+                        </div>
+                        <Progress
+                          value={q.total_questions > 0 ? (q.completed_questions / q.total_questions) * 100 : 0}
+                          className="h-1.5 mt-3"
+                        />
+                      </div>
+                      <div className="flex flex-col sm:items-end gap-2 shrink-0">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setActiveQuestionnaireId(q.id);
+                              setSelectedClient(q.client_id);
+                              setActiveStep(5);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                          >
+                            View in workflow
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={reminderSendingId === q.id}
+                            onClick={() => {
+                              void sendQuestionnaireReminder(q);
+                            }}
+                          >
+                            {reminderSendingId === q.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Bell className="h-4 w-4 mr-1" />
+                            )}
+                            Remind
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {q.questions && q.questions.length > 0 && (
+                      <Collapsible className="mt-4">
+                        <CollapsibleTrigger asChild>
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 text-sm text-doculaw-700 hover:underline w-full"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                            Show questions sent to the client ({q.questions.length})
+                          </button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-3">
+                          <ol className="list-decimal list-inside space-y-2 text-sm text-gray-800 max-h-56 overflow-y-auto pl-1 border-t pt-3">
+                            {q.questions.map((item) => (
+                              <li key={item.id} className="pl-1">
+                                <span className="text-gray-700">{item.question}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    )}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-2 space-y-6">
@@ -2297,7 +2548,12 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                                 ? 'border-doculaw-500 bg-doculaw-50'
                                 : 'border-gray-200 hover:border-doculaw-200'
                                 } cursor-pointer transition-colors`}
-                              onClick={() => setSelectedClient(client.id)}
+                              onClick={() => {
+                                if (client.id !== selectedClient) {
+                                  setActiveQuestionnaireId(null);
+                                }
+                                setSelectedClient(client.id);
+                              }}
                             >
                               <div className={`h-10 w-10 rounded-full flex items-center justify-center ${selectedClient === client.id
                                 ? 'bg-doculaw-100 text-doculaw-700'
@@ -2630,46 +2886,20 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                         {/* Send Reminder SMS */}
                         <div className="border-t pt-4">
                           <Button
-                            onClick={async () => {
-                              try {
-                                const clientDetails = await getClientDetails(selectedClient);
-                                if (!clientDetails.phone) {
-                                  toast({ title: "No Phone Number", description: "This client has no phone number on file.", variant: "destructive" });
-                                  return;
-                                }
-                                const loginLink = `https://doculaw.vercel.app/client-login`;
-                                const remaining = activeQuestionnaire
-                                  ? activeQuestionnaire.total_questions - activeQuestionnaire.completed_questions
-                                  : editedQuestions.length;
-                                const result = await sendSms({
-                                  to_phone: clientDetails.phone,
-                                  message_type: 'reminder',
-                                  client_id: selectedClient,
-                                  lawyer_id: user?.id,
-                                  case_id: caseId,
-                                  questionnaire_id: activeQuestionnaire?.id,
-                                  client_name: clientDetails.first_name || 'there',
-                                  lawyer_name: profile?.name || 'your attorney',
-                                  case_name: caseData?.name || 'your case',
-                                  question_count: editedQuestions.length,
-                                  remaining_questions: remaining,
-                                  deadline: activeQuestionnaire?.response_deadline || undefined,
-                                  login_link: loginLink,
-                                });
-                                if (result.success) {
-                                  toast({ title: "Reminder Sent", description: `SMS reminder sent to ${clientDetails.first_name || 'the client'}.` });
-                                } else {
-                                  toast({ title: "Reminder Failed", description: result.error || "Could not send SMS.", variant: "destructive" });
-                                }
-                              } catch (err) {
-                                console.error('Reminder SMS error:', err);
-                                toast({ title: "Error", description: "Failed to send reminder.", variant: "destructive" });
+                            onClick={() => {
+                              if (activeQuestionnaire) {
+                                void sendQuestionnaireReminder(activeQuestionnaire);
                               }
                             }}
+                            disabled={!activeQuestionnaire || (activeQuestionnaire ? reminderSendingId === activeQuestionnaire.id : false)}
                             variant="outline"
                             className="w-full"
                           >
-                            <SendIcon className="h-4 w-4 mr-2" />
+                            {activeQuestionnaire && reminderSendingId === activeQuestionnaire.id ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <SendIcon className="h-4 w-4 mr-2" />
+                            )}
                             Send Reminder SMS to Client
                           </Button>
                         </div>
