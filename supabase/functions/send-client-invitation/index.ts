@@ -261,7 +261,9 @@ serve(async (req) => {
     } catch (smsError) {
       console.error('Error sending SMS:', smsError);
 
-      // If SMS fails, we still want to return the magic link
+      // SMS failed. Return a non-200 status so the caller treats this as a
+      // failure and can surface the error to the lawyer, but include the
+      // magic link so they can share it manually if desired.
       return new Response(
         JSON.stringify({
           success: false,
@@ -269,7 +271,7 @@ serve(async (req) => {
           error: smsError instanceof Error ? smsError.message : 'SMS sending failed',
           magicLink: magicLink
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 502 }
       );
     }
   } catch (error) {

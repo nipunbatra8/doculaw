@@ -17,15 +17,16 @@ export const useCaseDocuments = () => {
     setError(null);
 
     try {
-      // Find the most recent complaint document for this case
-      const { data: documentData, error: documentError } = await supabase
+      // Find the most recent complaint document for this case owned by this user.
+      const query = supabase
         .from('documents')
         .select('*')
         .eq('case_id', caseId)
         .eq('type', 'complaint')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
+      if (user?.id) query.eq('user_id', user.id);
+      const { data: documentData, error: documentError } = await query.single();
 
       if (documentError) {
         if (documentError.code === 'PGRST116') {
@@ -93,15 +94,15 @@ export const useCaseDocuments = () => {
     setError(null);
 
     try {
-      // Find the most recent complaint document for this case
-      const { data: documentData, error: documentError } = await supabase
+      const q2 = supabase
         .from('documents')
         .select('*')
         .eq('case_id', caseId)
         .eq('type', 'complaint')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
+      if (user?.id) q2.eq('user_id', user.id);
+      const { data: documentData, error: documentError } = await q2.single();
 
       if (documentError) {
         if (documentError.code === 'PGRST116') {

@@ -123,11 +123,25 @@ const DemandLetterPage = () => {
       }
 
       const extractedInfo = await extractComplaintInformation(fileText);
-      
+
       setExtractedData(extractedInfo);
-      setIsExtracting(false);
       setShowExtractedDataDialog(true);
-      
+
+      if (caseId) {
+        try {
+          await supabase
+            .from('cases')
+            .update({
+              complaint_processed: true,
+              complaint_data: JSON.parse(JSON.stringify(extractedInfo)),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', caseId);
+        } catch (persistErr) {
+          console.error('Error persisting complaint_data:', persistErr);
+        }
+      }
+
       if (replacingComplaint) {
         toast({
           title: "Complaint Replaced",
@@ -141,6 +155,8 @@ const DemandLetterPage = () => {
         description: "We couldn't fully extract information from your document.",
         variant: "destructive"
       });
+    } finally {
+      setIsExtracting(false);
     }
   };
 

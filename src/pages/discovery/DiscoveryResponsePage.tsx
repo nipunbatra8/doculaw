@@ -294,6 +294,9 @@ const DiscoveryResponsePage = () => {
         if (savedResponseData.selected_objection_ids) {
           setSelectedObjections(savedResponseData.selected_objection_ids);
         }
+        if (savedResponseData.request_objections) {
+          setRequestObjections(savedResponseData.request_objections);
+        }
         if (savedResponseData.client_questions) {
           setEditedQuestions(savedResponseData.client_questions);
         }
@@ -328,7 +331,7 @@ const DiscoveryResponsePage = () => {
     if (!user || !caseId) return;
 
     try {
-      await supabase
+      const { error } = await supabase
         .from('discovery_response_data')
         .upsert({
           case_id: caseId,
@@ -337,6 +340,9 @@ const DiscoveryResponsePage = () => {
           detected_case_type: detectedCaseType,
           objections: suggestedObjections,
           selected_objection_ids: selectedObjections,
+          // Persist per-request objection drafts/direct-answer choices so they
+          // survive a page refresh.
+          request_objections: requestObjections,
           client_questions: editedQuestions,
           selected_client_id: selectedClient,
           client_responses: clientResponses,
@@ -347,10 +353,24 @@ const DiscoveryResponsePage = () => {
         }, {
           onConflict: 'case_id'
         });
+
+      if (error) {
+        console.error("Error saving response data:", error);
+        toast({
+          title: "Save Failed",
+          description: "Your changes could not be saved. Please retry.",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error("Error saving response data:", error);
+      toast({
+        title: "Save Failed",
+        description: "Your changes could not be saved. Please retry.",
+        variant: "destructive",
+      });
     }
-  }, [user, caseId, caseType, detectedCaseType, suggestedObjections, selectedObjections, editedQuestions, selectedClient, clientResponses, hasClientResponded, caseNarratives, selectedNarrative, responseSuggestions]);
+  }, [user, caseId, caseType, detectedCaseType, suggestedObjections, selectedObjections, requestObjections, editedQuestions, selectedClient, clientResponses, hasClientResponded, caseNarratives, selectedNarrative, responseSuggestions, toast]);
 
   // Fetch case details
   const { data: caseData, isLoading: isLoadingCase } = useQuery<CaseData | null>({
@@ -628,28 +648,27 @@ const DiscoveryResponsePage = () => {
     if (!user || !caseId) return;
 
     try {
-      // Get the document to delete
       const { data: doc, error: fetchError } = await supabase
         .from('discovery_responses')
         .select('file_path')
         .eq('case_id', caseId)
+        .eq('user_id', user.id)
         .eq('document_category', category)
         .single();
 
       if (fetchError) throw fetchError;
 
-      // Delete from storage
       if (doc?.file_path) {
         await supabase.storage
           .from('doculaw')
           .remove([doc.file_path]);
       }
 
-      // Delete from database
       await supabase
         .from('discovery_responses')
         .delete()
         .eq('case_id', caseId)
+        .eq('user_id', user.id)
         .eq('document_category', category);
 
       // Clear local state
@@ -960,11 +979,10 @@ Please modify the question according to the user's instruction while keeping it 
             role: 'user',
             content: `You are helping a lawyer draft discovery objections.
 
-Question: ${objection.question}
+Current Objection: ${objection.text}
+Relevance Notes: ${objection.relevance || 'N/A'}
 
-Current Objection: ${objection.objection}
-
-Please generate a NEW alternative objection for this question. Make it legally sound and professionally written. Return only the new objection text, nothing else.`,
+Please generate a NEW alternative objection that covers the same legal concern. Make it legally sound and professionally written. Return only the new objection text, nothing else.`,
           },
         ],
       });
@@ -974,7 +992,7 @@ Please generate a NEW alternative objection for this question. Make it legally s
         setSuggestedObjections(prevObjections =>
           prevObjections.map(o =>
             o.id === objectionId
-              ? { ...o, objection: newObjection }
+              ? { ...o, text: newObjection }
               : o
           )
         );
@@ -1018,9 +1036,8 @@ Please generate a NEW alternative objection for this question. Make it legally s
             role: 'user',
             content: `You are helping a lawyer draft discovery objections.
 
-Question: ${objection.question}
-
-Current Objection: ${objection.objection}
+Current Objection: ${objection.text}
+Relevance Notes: ${objection.relevance || 'N/A'}
 
 User's Instruction: ${prompt}
 
@@ -1034,7 +1051,7 @@ Please modify the objection according to the user's instruction while keeping it
         setSuggestedObjections(prevObjections =>
           prevObjections.map(o =>
             o.id === aiEditingObjectionId
-              ? { ...o, objection: editedText }
+              ? { ...o, text: editedText }
               : o
           )
         );
@@ -1627,7 +1644,14 @@ Return ONLY the modified objection text, no preamble or explanation.`;
         .map(d => d?.responseDeadline)
         .filter(Boolean);
 
-      const earliestDeadline = deadlines.length > 0 ? deadlines.sort()[0] : null;
+      // Sort by actual calendar date, not lexicographically, so deadlines
+      // expressed with different formats still yield the correct earliest.
+      const earliestDeadline = deadlines.length > 0
+        ? deadlines
+            .map(d => ({ raw: d, ts: new Date(d as string).getTime() }))
+            .filter(d => !Number.isNaN(d.ts))
+            .sort((a, b) => a.ts - b.ts)[0]?.raw ?? null
+        : null;
 
       // Create the questionnaire
       const { data: questionnaire, error } = await supabase
@@ -2561,8 +2585,9 @@ Return ONLY the modified objection text, no preamble or explanation.`;
                             </Badge>
                           </div>
                           <p className="text-sm text-gray-600 mb-4">
-                            The client will receive an email notification with a link to complete the questionnaire.
-                            You'll be notified once they submit their responses.
+                            The client will receive a text message (SMS) with a secure
+                            link to complete the questionnaire. You'll be notified once
+                            they submit their responses.
                           </p>
                           {activeQuestionnaire && (
                             <>

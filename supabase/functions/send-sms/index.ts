@@ -90,16 +90,38 @@ serve(async (req) => {
       )
     }
 
+    // Build the message first so we can log even when Twilio isn't set up.
+    const messageBody = buildMessage(data)
+
     // Validate Twilio credentials
     if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
+      // Audit-log the failed send so operators can see missing config
+      try {
+        await supabase
+          .from('sms_messages')
+          .insert({
+            lawyer_id: data.lawyer_id,
+            client_id: data.client_id,
+            to_phone: data.to_phone,
+            from_phone: null,
+            message_body: messageBody,
+            message_type: data.message_type,
+            case_id: data.case_id,
+            questionnaire_id: data.questionnaire_id,
+            status: 'failed',
+            error_message: 'Twilio credentials not configured',
+          })
+      } catch (logErr) {
+        console.error('Failed to log missing-Twilio SMS attempt:', logErr)
+      }
       return new Response(
-        JSON.stringify({ error: 'Twilio credentials not configured' }),
+        JSON.stringify({
+          success: false,
+          error: 'Twilio credentials not configured. Please set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in your Supabase project secrets.',
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
     }
-
-    // Build the message
-    const messageBody = buildMessage(data)
 
     // Log the message to database
     const { data: messageRecord, error: dbError } = await supabase

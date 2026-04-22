@@ -85,13 +85,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setNeedsOnboarding(false);
       return;
     }
-    
-    // For non-client users (lawyers), check profile and onboarding status
+
+    // Authoritative source: the profiles row. If it says completed, we're
+    // done. If it says not completed, send the user to onboarding.
     if (profile) {
-      // If profile exists but onboarding is not completed, user needs to complete onboarding
-      setNeedsOnboarding(!profile.onboarding_completed);
+      const completed = !!profile.onboarding_completed;
+      setNeedsOnboarding(!completed);
+      if (completed) {
+        localStorage.setItem(`doculaw_onboarding_${user.id}`, 'completed');
+      }
+      return;
+    }
+
+    // Fallback while profile is still loading or missing: trust localStorage
+    // so users who have already finished onboarding never see the screen a
+    // second time (e.g. after a refresh/logout+login, if the profile fetch
+    // is briefly blocked by RLS/network).
+    const cached = localStorage.getItem(`doculaw_onboarding_${user.id}`);
+    if (cached === 'completed') {
+      setNeedsOnboarding(false);
     } else {
-      // If user exists but profile doesn't exist, user needs to complete onboarding
       setNeedsOnboarding(true);
     }
   }, [user, profile]);
