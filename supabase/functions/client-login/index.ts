@@ -69,7 +69,7 @@ serve(async (req) => {
     console.log('Using redirectTo:', redirectTo || `https://doculaw.vercel.app/auth/callback`)
 
     // Client found, send a magic link via email
-    const { data: authData, error: authError } = await supabase.auth.signInWithOtp({
+    const { error: authError } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
         shouldCreateUser: true,
@@ -93,13 +93,74 @@ serve(async (req) => {
       )
     }
 
-    // Return success response
+    // Log the fact that a login link was dispatched. Supabase emails the
+    // user directly; we log the attempt so the app has an audit trail.
+    try {
+      await supabase.from('sms_messages').insert({
+        client_id: clientData[0].id,
+        to_phone: clientData[0].phone || null,
+        from_phone: null,
+        message_body: `Magic link email sent to ${normalizedEmail}`,
+        message_type: 'login_link',
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+      })
+    } catch (logError) {
+      console.warn('Failed to log login link dispatch:', logError)
+    }
+
+    // If the client also has a phone on file and Twilio is configured, send
+    // an SMS with the magic link as a secondary channel. The SMS body
+    // mirrors send-client-invitation's message so the experience is
+    // consistent.
+    let smsSent = false
+    const clientPhone = clientData[0].phone
+    if (clientPhone && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
+      try {
+        const linkRes = await supabase.auth.admin.generateLink({
+          type: 'magiclink',
+          email: normalizedEmail,
+          options: { redirectTo: redirectTo || `https://doculaw.vercel.app/auth/callback` },
+        })
+        const magicLink = linkRes.data?.properties?.action_link
+        if (magicLink) {
+          const twilioEndpoint = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`
+          const body = `DocuLaw: Your login link is ready. Tap to sign in: ${magicLink}`
+          const resp = await fetch(twilioEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
+            },
+            body: new URLSearchParams({ To: clientPhone, From: TWILIO_PHONE_NUMBER, Body: body }),
+          })
+          smsSent = resp.ok
+          try {
+            await supabase.from('sms_messages').insert({
+              client_id: clientData[0].id,
+              to_phone: clientPhone,
+              from_phone: TWILIO_PHONE_NUMBER,
+              message_body: body,
+              message_type: 'login_link',
+              status: resp.ok ? 'sent' : 'failed',
+              sent_at: resp.ok ? new Date().toISOString() : null,
+              error_message: resp.ok ? null : await resp.clone().text(),
+            })
+          } catch (logErr) {
+            console.warn('Failed to log login SMS:', logErr)
+          }
+        }
+      } catch (smsErr) {
+        console.warn('Failed to send login SMS:', smsErr)
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Magic link sent successfully',
+        message: 'Magic link dispatched',
         email: normalizedEmail,
-        sms_sent: false
+        sms_sent: smsSent,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
