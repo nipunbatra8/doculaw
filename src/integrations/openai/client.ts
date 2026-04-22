@@ -4,6 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 const apiKey =
   import.meta.env.OPENAI_API_KEY || import.meta.env.VITE_OPENAI_API_KEY;
 const openaiModel = "gpt-4.1-nano";
+// Vision-capable model used when we need to read the actual bytes of an image
+// or PDF. gpt-4.1-nano works for text-only reasoning but the Responses
+// `input_file` path is more reliable on gpt-4o-mini for mixed workloads.
+const visionModel = "gpt-4o-mini";
 
 if (!apiKey) {
   console.error("OpenAI API key is missing. Please check your .env file.");
@@ -16,8 +20,42 @@ const openai = new OpenAI({
 
 export { openai, openaiModel };
 
+/**
+ * Safe JSON parser that tolerates markdown fences and surrounding prose.
+ */
+function safeJsonParse<T>(raw: string): T | null {
+  if (!raw) return null;
+  let text = raw.trim();
+  if (text.startsWith("```")) {
+    text = text.replace(/^```[a-zA-Z]*\n?/, "").replace(/```\s*$/, "").trim();
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // ignore
+  }
+  const objectMatch = text.match(/\{[\s\S]*\}/);
+  if (objectMatch) {
+    try {
+      return JSON.parse(objectMatch[0]) as T;
+    } catch {
+      // ignore
+    }
+  }
+  const arrayMatch = text.match(/\[[\s\S]*\]/);
+  if (arrayMatch) {
+    try {
+      return JSON.parse(arrayMatch[0]) as T;
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
 async function runChatCompletion(
   prompt: string | OpenAI.Chat.ChatCompletionContentPart[],
+  options?: { jsonMode?: boolean },
 ): Promise<string> {
   const result = await openai.chat.completions.create({
     model: openaiModel,
@@ -27,8 +65,74 @@ async function runChatCompletion(
         content: prompt as OpenAI.Chat.ChatCompletionUserMessageParam["content"],
       },
     ],
+    ...(options?.jsonMode
+      ? { response_format: { type: "json_object" as const } }
+      : {}),
   });
   return result.choices[0]?.message?.content?.trim() ?? "";
+}
+
+/**
+ * Run a prompt with a file attachment (PDF or image) using the Responses API,
+ * which is the only way chat models can actually read the document bytes.
+ */
+async function runResponseWithFile(
+  prompt: string,
+  fileBase64: string,
+  mimeType: string,
+  options?: { jsonMode?: boolean; filename?: string },
+): Promise<string> {
+  const dataUrl = `data:${mimeType};base64,${fileBase64}`;
+  const isImage = mimeType.startsWith("image/");
+
+  const filePart = isImage
+    ? ({ type: "input_image" as const, image_url: dataUrl, detail: "auto" as const })
+    : ({
+        type: "input_file" as const,
+        filename: options?.filename || "document.pdf",
+        file_data: dataUrl,
+      });
+
+  // We cast to any because the SDK's stricter union types vary between
+  // minor versions; the runtime API accepts input_file/input_image the same
+  // way across 4.x.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result: any = await (openai as any).responses.create({
+    model: visionModel,
+    input: [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: prompt },
+          filePart,
+        ],
+      },
+    ],
+    ...(options?.jsonMode
+      ? { text: { format: { type: "json_object" } } }
+      : {}),
+  });
+
+  // Prefer output_text convenience property, fall back to walking output.
+  if (typeof result?.output_text === "string" && result.output_text.length > 0) {
+    return result.output_text.trim();
+  }
+  try {
+    const chunks: string[] = [];
+    for (const item of result?.output ?? []) {
+      if (item?.type === "message" && Array.isArray(item.content)) {
+        for (const part of item.content) {
+          if (part?.type === "output_text" && typeof part.text === "string") {
+            chunks.push(part.text);
+          }
+        }
+      }
+    }
+    return chunks.join("\n").trim();
+  } catch (e) {
+    console.error("Failed to read Responses API output:", e);
+    return "";
+  }
 }
 
 export interface ComplaintInformation {
@@ -160,7 +264,7 @@ export async function extractComplaintInformationFromFile(
     const prompt = `
     You are a legal assistant extracting information from a complaint document. 
     
-    Please analyze the document I've provided and extract the following information in detailed JSON format:
+    Please analyze the attached document and extract the following information in detailed JSON format:
     
     1. Basic case information (defendant, plaintiff, case number, filing date, etc.)
     2. Court information 
@@ -175,9 +279,7 @@ export async function extractComplaintInformationFromFile(
       "filingDate": "Filing date",
       "chargeDescription": "Charge/claim description",
       "courtName": "Court name",
-      "court": {
-        "county": "County name"
-      },
+      "court": { "county": "County name" },
       "case": {
         "shortTitle": "Short title (e.g., 'Smith v. Johnson')",
         "caseNumber": "Case number"
@@ -206,55 +308,26 @@ export async function extractComplaintInformationFromFile(
       "caseType": "Type of case (e.g., personal injury, contract dispute)"
     }
     
-    For any field where information isn't available in the document, please use reasonable defaults or leave as null.
+    For any field where information isn't clearly available in the document,
+    use a reasonable default (empty string) instead of inventing data.
     Return only the JSON object with no other text.
     `;
 
-    const dataUrl = `data:${mimeType};base64,${fileBase64}`;
-    const isImage = mimeType.startsWith("image/");
-
-    const result = await openai.chat.completions.create({
-      model: openaiModel,
-      messages: [
-        {
-          role: "user",
-          content: isImage
-            ? [
-                { type: "text", text: prompt },
-                { type: "image_url", image_url: { url: dataUrl } },
-              ]
-            : [
-                {
-                  type: "text",
-                  text: `${prompt}\n\n(Document provided inline as base64 with MIME type ${mimeType}.)`,
-                },
-              ],
-        },
-      ],
+    const text = await runResponseWithFile(prompt, fileBase64, mimeType, {
+      jsonMode: true,
+      filename: "complaint.pdf",
     });
 
-    const text = result.choices[0]?.message?.content?.trim() ?? "";
+    console.log("OpenAI file analysis response length:", text.length);
 
-    console.log("OpenAI file analysis response:", text);
+    const parsed = safeJsonParse<ComplaintInformation>(text);
+    if (parsed) return parsed;
 
-    try {
-      return JSON.parse(text);
-    } catch (parseError) {
-      console.error("Error parsing OpenAI file analysis response:", parseError);
-
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0]);
-        }
-      } catch (secondParseError) {
-        console.error("Second attempt at parsing JSON failed:", secondParseError);
-      }
-
-      console.log("Falling back to text extraction...");
-      const textData = await extractTextFromFile(fileBase64, mimeType);
-      return extractComplaintInformation(textData);
-    }
+    console.warn(
+      "Could not parse structured JSON from file extraction; falling back to text extraction.",
+    );
+    const textData = await extractTextFromFile(fileBase64, mimeType);
+    return extractComplaintInformation(textData);
   } catch (error) {
     console.error("Error analyzing file with OpenAI:", error);
 
@@ -275,41 +348,24 @@ export async function extractComplaintInformationFromFile(
  * @param mimeType File MIME type
  * @returns Extracted text from the file
  */
-async function extractTextFromFile(
+export async function extractTextFromFile(
   fileBase64: string,
   mimeType: string,
 ): Promise<string> {
   try {
-    const prompt = `
-    Please extract all the text content from this document as accurately as possible.
-    Return only the extracted text with no additional comments.
-    For table content, please preserve the structure as much as possible using plain text formatting.
-    `;
+    const prompt = `Please extract ALL text content from the attached document as accurately and completely as possible.
+Include every page, section, numbered item, heading, and footer. Do not summarize,
+skip, merge, or omit anything. Preserve the ordering of the document.
+For table content, preserve the structure using plain text formatting.
+For scanned or image-based pages, use OCR to read the text.
+Return only the extracted text with no additional commentary.`;
 
-    const dataUrl = `data:${mimeType};base64,${fileBase64}`;
-    const isImage = mimeType.startsWith("image/");
-
-    const result = await openai.chat.completions.create({
-      model: openaiModel,
-      messages: [
-        {
-          role: "user",
-          content: isImage
-            ? [
-                { type: "text", text: prompt },
-                { type: "image_url", image_url: { url: dataUrl } },
-              ]
-            : [
-                {
-                  type: "text",
-                  text: `${prompt}\n\n(Document provided inline as base64 with MIME type ${mimeType}.)`,
-                },
-              ],
-        },
-      ],
-    });
-
-    const extractedText = result.choices[0]?.message?.content ?? "";
+    const extractedText = await runResponseWithFile(
+      prompt,
+      fileBase64,
+      mimeType,
+      { filename: "document.pdf" },
+    );
 
     console.log("Text extraction successful, length:", extractedText.length);
     return extractedText;
@@ -386,26 +442,15 @@ export async function extractComplaintInformation(
     ${docText}
     `;
 
-    const text = await runChatCompletion(prompt);
+    const text = await runChatCompletion(prompt, { jsonMode: true });
 
-    console.log("OpenAI API response:", text);
+    console.log("OpenAI API response length:", text.length);
 
-    try {
-      return JSON.parse(text);
-    } catch (parseError) {
-      console.error("Error parsing OpenAI response as JSON:", parseError);
+    const parsed = safeJsonParse<ComplaintInformation>(text);
+    if (parsed) return parsed;
 
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0]);
-        }
-      } catch (secondParseError) {
-        console.error("Second attempt at parsing JSON failed:", secondParseError);
-      }
-
-      return buildFallbackComplaint();
-    }
+    console.error("Could not parse ComplaintInformation JSON from model output.");
+    return buildFallbackComplaint();
   } catch (error) {
     console.error("Error calling OpenAI API:", error);
     return buildFallbackComplaint();
@@ -430,18 +475,14 @@ export async function generateRFAWithAI(
     }
     `;
 
-  const text = await runChatCompletion(prompt);
+  const text = await runChatCompletion(prompt, { jsonMode: true });
 
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    throw new Error("Failed to parse JSON from OpenAI response.");
-  } catch (e) {
-    console.error("Error parsing RFA generation response:", e);
-    throw new Error("Failed to generate RFA data.");
+  const parsed = safeJsonParse<RfaData>(text);
+  if (parsed && Array.isArray(parsed.vectorBasedDefinitions) && Array.isArray(parsed.vectorBasedAdmissions)) {
+    return parsed;
   }
+  console.error("Error parsing RFA generation response");
+  throw new Error("Failed to generate RFA data.");
 }
 
 export async function generateSIWithAI(
@@ -462,21 +503,18 @@ export async function generateSIWithAI(
     }
   `;
 
-  const text = await runChatCompletion(prompt);
+  const text = await runChatCompletion(prompt, { jsonMode: true });
 
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in SI response");
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (
-      !Array.isArray(parsed.vectorBasedDefinitions) ||
-      !Array.isArray(parsed.vectorBasedInterrogatories)
-    ) {
-      throw new Error("Invalid SI response shape");
-    }
+  const parsed = safeJsonParse<SiData>(text);
+  if (
+    parsed &&
+    Array.isArray(parsed.vectorBasedDefinitions) &&
+    Array.isArray(parsed.vectorBasedInterrogatories)
+  ) {
     return parsed;
-  } catch (e) {
-    console.error("Failed to parse SI JSON:", e, text);
+  }
+  console.error("Failed to parse SI JSON", text);
+  {
     return {
       vectorBasedDefinitions: [
         'The term "PLAINTIFF" refers to the party propounding these interrogatories.',
@@ -508,18 +546,18 @@ export async function generateRFPWithAI(
     }
     `;
 
-  const text = await runChatCompletion(prompt);
+  const text = await runChatCompletion(prompt, { jsonMode: true });
 
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    throw new Error("Failed to parse JSON from OpenAI response.");
-  } catch (e) {
-    console.error("Error parsing RFP generation response:", e);
-    throw new Error("Failed to generate RFP data.");
+  const parsed = safeJsonParse<RfpData>(text);
+  if (
+    parsed &&
+    Array.isArray(parsed.vectorBasedDefinitions) &&
+    Array.isArray(parsed.vectorBasedProductions)
+  ) {
+    return parsed;
   }
+  console.error("Error parsing RFP generation response");
+  throw new Error("Failed to generate RFP data.");
 }
 
 /**
@@ -659,7 +697,7 @@ export async function analyzeCheckboxesForFormInterrogatories(
     For other sections, set to true only if they clearly apply to this specific case.
     `;
 
-    const text = await runChatCompletion(prompt);
+    const text = await runChatCompletion(prompt, { jsonMode: true });
 
     console.log("===== OPENAI CHECKBOX ANALYSIS RESPONSE =====");
     console.log(text);
@@ -775,25 +813,10 @@ ${customInstructions ? `Additional instructions: ${customInstructions}` : ""}
 
 Return ONLY valid JSON, no markdown formatting.`;
 
-  const text = await runChatCompletion(prompt);
+  const text = await runChatCompletion(prompt, { jsonMode: true });
 
-  let cleaned = text;
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
-  }
-  try {
-    return JSON.parse(cleaned);
-  } catch (e) {
-    /* ignore parse attempt */
-  }
-  const match = cleaned.match(/\{[\s\S]*\}/);
-  if (match) {
-    try {
-      return JSON.parse(match[0]);
-    } catch (e) {
-      /* ignore second parse attempt */
-    }
-  }
+  const parsed = safeJsonParse<DemandLetterData>(text);
+  if (parsed) return parsed;
   throw new Error("Failed to parse demand letter JSON");
 }
 
@@ -833,78 +856,57 @@ export async function extractDiscoveryDocument(
   try {
     console.log(`Extracting ${documentCategory} document with OpenAI...`);
 
-    const prompt = `
-    You are a legal assistant analyzing a discovery document (${documentCategory}).
-    
-    Please extract all questions and metadata from this discovery document.
-    
-    Return a JSON object with this structure:
+    const prompt = `You are a legal assistant analyzing an opposing party's discovery document (${documentCategory}).
+
+CRITICAL: Extract EVERY SINGLE question, interrogatory, request for admission, or
+request for production contained in the attached document. Do not merge multiple
+questions into one entry. Do not skip any numbered item even if it continues on a
+new page. Preserve the original question numbering. Include every subpart
+(e.g. 3.1, 3.2, 3.3) as its own entry when they are separately numbered.
+
+Return a JSON object with this exact structure:
+{
+  "documentType": "${documentCategory}",
+  "propoundingParty": "Name of the party propounding these requests",
+  "respondingParty": "Name of the party who must respond",
+  "caseNumber": "Case number if found",
+  "setNumber": "Set number (e.g., 'First Set', 'Second Set')",
+  "serviceDate": "Date the document was served, if found",
+  "responseDeadline": "Response deadline date, if found",
+  "questions": [
     {
-      "documentType": "${documentCategory}",
-      "propoundingParty": "Name of the party propounding these requests",
-      "respondingParty": "Name of the party who must respond",
-      "caseNumber": "Case number if found",
-      "setNumber": "Set number (e.g., 'First Set', 'Second Set')",
-      "serviceDate": "Date the document was served, if found",
-      "responseDeadline": "Response deadline date, if found",
-      "questions": [
-        {
-          "id": "unique_id",
-          "number": "question number from document",
-          "question": "The full text of the question/request",
-          "category": "category if applicable (e.g., 'General', 'Incident')"
-        }
-      ]
+      "id": "unique_id",
+      "number": "question number exactly as in document (e.g., '1', '3.2', 'RFA No. 5')",
+      "question": "The FULL text of the question/request, verbatim",
+      "category": "category heading from the document, if any"
     }
-    
-    Extract every single question, interrogatory, request for admission, or request for production from the document.
-    Be thorough and capture all questions exactly as written.
-    Return only valid JSON with no markdown formatting.
-    `;
+  ]
+}
 
-    const dataUrl = `data:${mimeType};base64,${fileBase64}`;
-    const isImage = mimeType.startsWith("image/");
+Rules:
+- Include ALL questions; never truncate, summarize or stop early.
+- Preserve each question's exact wording.
+- Use OCR on scanned/image pages.
+- Return ONLY valid JSON with no markdown formatting.`;
 
-    const result = await openai.chat.completions.create({
-      model: openaiModel,
-      messages: [
-        {
-          role: "user",
-          content: isImage
-            ? [
-                { type: "text", text: prompt },
-                { type: "image_url", image_url: { url: dataUrl } },
-              ]
-            : [
-                {
-                  type: "text",
-                  text: `${prompt}\n\n(Document provided inline as base64 with MIME type ${mimeType}.)`,
-                },
-              ],
-        },
-      ],
+    const text = await runResponseWithFile(prompt, fileBase64, mimeType, {
+      jsonMode: true,
+      filename: `${documentCategory.replace(/\s+/g, "_")}.pdf`,
     });
 
-    const text = result.choices[0]?.message?.content ?? "";
+    console.log("OpenAI extraction response length:", text.length);
 
-    console.log("OpenAI extraction response:", text.substring(0, 500));
-
-    try {
-      let cleaned = text.trim();
-      if (cleaned.startsWith("```")) {
-        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
-      }
-      return JSON.parse(cleaned);
-    } catch (parseError) {
-      console.error("Error parsing extraction response:", parseError);
-
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-
-      throw new Error("Failed to parse discovery document");
+    const parsed = safeJsonParse<DiscoveryDocumentData>(text);
+    if (parsed && Array.isArray(parsed.questions)) {
+      // Sanity: assign ids if missing so the app can key them reliably.
+      parsed.questions = parsed.questions.map((q, idx) => ({
+        ...q,
+        id: q.id && String(q.id).trim().length > 0 ? String(q.id) : `q_${idx + 1}`,
+      }));
+      return parsed;
     }
+
+    throw new Error("Failed to parse discovery document JSON");
   } catch (error) {
     console.error("Error extracting discovery document:", error);
     throw error;
@@ -964,22 +966,15 @@ export async function generateObjectionsForDiscovery(
 
     const text = await runChatCompletion(prompt);
 
-    console.log("Generated objections response:", text.substring(0, 500));
+    console.log("Generated objections response length:", text.length);
 
-    try {
-      let cleaned = text.trim();
-      if (cleaned.startsWith("```")) {
-        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
-      }
-      return JSON.parse(cleaned);
-    } catch (parseError) {
-      console.error("Error parsing objections response:", parseError);
-
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-
+    const parsed = safeJsonParse<ObjectionData[]>(text);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    // Fallback defaults if parsing fails
+    {
+      console.error("Error parsing objections response");
       return [
         {
           id: "obj_1",
@@ -1108,24 +1103,32 @@ export async function generateObjectionsAndNarratives(
     Return only valid JSON with no markdown formatting.
     `;
 
-    const text = await runChatCompletion(prompt);
+    const text = await runChatCompletion(prompt, { jsonMode: true });
 
-    console.log("Generated objections and narratives:", text.substring(0, 500));
+    console.log("Generated objections and narratives length:", text.length);
 
-    try {
-      let cleaned = text.trim();
-      if (cleaned.startsWith("```")) {
-        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
-      }
-      return JSON.parse(cleaned);
-    } catch (parseError) {
-      console.error("Error parsing response:", parseError);
-
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-
+    type Result = {
+      objections: ObjectionData[];
+      narratives: Array<{
+        id: string;
+        title: string;
+        description: string;
+        strength: "strong" | "moderate" | "weak";
+        keyPoints: string[];
+        recommendedObjections: string[];
+      }>;
+      responseSuggestions: Array<{
+        questionId: string;
+        suggestion: string;
+        reasoning: string;
+      }>;
+    };
+    const parsed = safeJsonParse<Result>(text);
+    if (parsed && Array.isArray(parsed.objections)) {
+      return parsed;
+    }
+    console.error("Error parsing objections/narratives response");
+    {
       return {
         objections: [
           {
@@ -1203,34 +1206,43 @@ export async function generateClientQuestions(
 
     const text = await runChatCompletion(prompt);
 
-    console.log("Generated client questions response:", text.substring(0, 500));
+    console.log("Generated client questions response length:", text.length);
 
-    try {
-      let cleaned = text.trim();
-      if (cleaned.startsWith("```")) {
-        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
+    type ClientQ = { id: string; question: string; original: string; edited: boolean };
+    const parsed = safeJsonParse<ClientQ[]>(text);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // CRITICAL: never drop questions. If the model returned fewer entries
+      // than were requested, pass through the remaining original questions so
+      // that every single extracted discovery question is represented in the
+      // client questionnaire.
+      if (parsed.length < questions.length) {
+        console.warn(
+          `Model returned ${parsed.length} client questions for ${questions.length} discovery questions; backfilling remaining originals.`,
+        );
+        const extras: ClientQ[] = questions.slice(parsed.length).map((q, i) => ({
+          id: `q_${parsed.length + i + 1}`,
+          question: q.question,
+          original: q.question,
+          edited: false,
+        }));
+        return [...parsed, ...extras];
       }
-      return JSON.parse(cleaned);
-    } catch (parseError) {
-      console.error("Error parsing client questions response:", parseError);
-
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-
-      return questions.slice(0, 20).map((q, i) => ({
-        id: `q_${i + 1}`,
-        question: q.question,
-        original: q.question,
-        edited: false,
-      }));
+      return parsed;
     }
+
+    console.error("Error parsing client questions response; passing originals through");
+    // Never slice: every extracted question must be surfaced to the client.
+    return questions.map((q, i) => ({
+      id: q.id || `q_${i + 1}`,
+      question: q.question,
+      original: q.question,
+      edited: false,
+    }));
   } catch (error) {
     console.error("Error generating client questions:", error);
 
-    return questions.slice(0, 20).map((q, i) => ({
-      id: `q_${i + 1}`,
+    return questions.map((q, i) => ({
+      id: q.id || `q_${i + 1}`,
       question: q.question,
       original: q.question,
       edited: false,

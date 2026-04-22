@@ -184,11 +184,30 @@ const FormInterrogatoriesPage = () => {
 
       // Call the OpenAI API to extract information from the document text
       const extractedInfo = await extractComplaintInformation(fileText);
-      
+
       setExtractedData(extractedInfo);
-      setIsExtracting(false);
       setShowExtractedDataDialog(true);
-      
+
+      // Persist extracted complaint data onto the case record so the rest of
+      // the app can use it immediately without needing to re-extract.
+      if (caseId) {
+        try {
+          const { error: updateError } = await supabase
+            .from('cases')
+            .update({
+              complaint_processed: true,
+              complaint_data: JSON.parse(JSON.stringify(extractedInfo)),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', caseId);
+          if (updateError) {
+            console.error('Error persisting complaint_data on case:', updateError);
+          }
+        } catch (persistErr) {
+          console.error('Exception persisting complaint_data on case:', persistErr);
+        }
+      }
+
       if (replacingComplaint) {
         toast({
           title: "Complaint Replaced",
@@ -197,13 +216,13 @@ const FormInterrogatoriesPage = () => {
       }
     } catch (error) {
       console.error("Error extracting information from document:", error);
-      
-      // Show error toast
       toast({
         title: "Information Extraction Limited",
         description: "We couldn't fully extract information from your document. You can manually edit the details.",
         variant: "destructive"
       });
+    } finally {
+      setIsExtracting(false);
     }
   };
 

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -210,42 +209,60 @@ const DiscoveryRequestPage = () => {
 
       // Call the OpenAI API to extract information from the document text
       const extractedInfo = await extractComplaintInformation(fileText);
-      
+
       setExtractedData(extractedInfo);
-      setIsExtracting(false);
       setShowExtractedDataDialog(true);
-      
-      // If we were replacing a complaint, update the document state and show success message
+
+      // Persist the extracted data directly on the case row so every other
+      // workflow (FROG, SROG, RFA, RFP, demand letter, discovery response)
+      // can pick it up without re-extracting.
+      if (caseId) {
+        try {
+          const { error: updateError } = await supabase
+            .from('cases')
+            .update({
+              complaint_processed: true,
+              complaint_data: JSON.parse(JSON.stringify(extractedInfo)),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', caseId);
+          if (updateError) {
+            console.error('Error persisting complaint_data:', updateError);
+          }
+        } catch (persistErr) {
+          console.error('Error persisting complaint_data:', persistErr);
+        }
+      }
+
       if (replacingComplaint) {
         toast({
           title: "Complaint Replaced",
           description: "The complaint document has been successfully replaced.",
         });
-        // We'll refresh the data by reloading the page after dialog is closed
       }
     } catch (error) {
       console.error("Error extracting information from document:", error);
-      
-      // Use mock data as fallback
-      const mockExtractedData: ComplaintInformation = {
-        defendant: "John Doe",
-        plaintiff: "State of California",
-        caseNumber: `CR-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`,
-        filingDate: format(new Date(), 'MMM d, yyyy'),
-        chargeDescription: "Violation of Penal Code § 459 (Burglary)",
-        courtName: "Superior Court of California, County of Los Angeles"
-      };
-      
-      setExtractedData(mockExtractedData);
-      setIsExtracting(false);
-      setShowExtractedDataDialog(true);
-      
-      // Show error toast
+      // We intentionally do NOT substitute mock/placeholder data here. For a
+      // legal product it is dangerous to quietly invent case fields; the user
+      // must know that extraction failed so they can manually re-upload or
+      // fill in the correct information.
       toast({
-        title: "Information Extraction Limited",
-        description: "We couldn't fully extract information from your document. You can manually edit the details.",
-        variant: "destructive"
+        title: "Extraction Failed",
+        description:
+          "We couldn't extract information from your document. Please try a different PDF or fill in the details manually below.",
+        variant: "destructive",
       });
+      setExtractedData({
+        defendant: "",
+        plaintiff: "",
+        caseNumber: "",
+        filingDate: "",
+        chargeDescription: "",
+        courtName: "",
+      });
+      setShowExtractedDataDialog(true);
+    } finally {
+      setIsExtracting(false);
     }
   };
 

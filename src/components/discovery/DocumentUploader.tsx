@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import pdfToText from 'react-pdftotext';
-import { extractComplaintInformation } from "@/integrations/openai/client";
+import { extractComplaintInformation, extractTextFromFile } from "@/integrations/openai/client";
 
 interface DocumentUploaderProps {
   onFileUploaded: (fileUrl: string, fileText: string, fileName: string) => void;
@@ -81,7 +81,43 @@ const DocumentUploader = ({ onFileUploaded, caseId, documentType }: DocumentUplo
     try {
       // Start text extraction first
       setExtractionProgress(10);
-      const extractedText = await pdfToText(file);
+      let extractedText = "";
+      try {
+        extractedText = await pdfToText(file);
+      } catch (textErr) {
+        console.warn("pdfToText failed; will fall back to OCR via OpenAI", textErr);
+        extractedText = "";
+      }
+      setExtractionProgress(50);
+
+      // If the PDF is scanned/image-based, pdfToText returns little-to-no
+      // text. Fall back to OpenAI (Responses API) which performs OCR on
+      // image-based PDFs. We treat < 200 non-whitespace characters as
+      // effectively empty for a legal complaint (the shortest real
+      // complaints are several pages).
+      const meaningful = extractedText.replace(/\s+/g, " ").trim();
+      if (meaningful.length < 200) {
+        try {
+          toast({
+            title: "Running OCR",
+            description:
+              "This PDF appears to be scanned. Running OCR to extract text...",
+          });
+          const arrayBuffer = await file.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(arrayBuffer).reduce(
+              (data, byte) => data + String.fromCharCode(byte),
+              "",
+            ),
+          );
+          const ocrText = await extractTextFromFile(base64, file.type || "application/pdf");
+          if (ocrText && ocrText.replace(/\s+/g, " ").trim().length > meaningful.length) {
+            extractedText = ocrText;
+          }
+        } catch (ocrError) {
+          console.error("OCR fallback failed:", ocrError);
+        }
+      }
       setExtractionProgress(100);
       
       // Start file upload
