@@ -8,7 +8,8 @@ import { useAuth } from "@/context/AuthContext";
 import CasesPage from "../../components/layout/CasesPage";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState } from "react";
+/** Estimated manual time avoided per discovery question handled through DocuLaw (minutes). */
+const MINUTES_SAVED_PER_DISCOVERY_QUESTION = 12;
 
 const DashboardPage = () => {
   const { user } = useAuth();
@@ -62,17 +63,77 @@ const DashboardPage = () => {
     enabled: !!user
   });
 
-  // Fetch discovery requests count
-  const { data: discoveryRequestsCount = 0 } = useQuery({
-    queryKey: ['discovery-requests-count', user?.id],
+  // Discovery totals, in-flight requests, and estimated time saved (last 30 days) from real usage
+  const { data: discoveryMetrics, isLoading: loadingDiscoveryMetrics } = useQuery({
+    queryKey: ['lawyer-discovery-dashboard-metrics', user?.id],
     queryFn: async () => {
-      if (!user) return 0;
-      
-      // This is a placeholder - in a real app, you would fetch this from a discovery_requests table
-      return 7; // Currently hardcoded value
+      if (!user) {
+        return {
+          totalRequests: 0,
+          awaitingResponse: 0,
+          timeSavedHoursRounded: 0,
+        };
+      }
+
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const cutoffIso = thirtyDaysAgo.toISOString();
+
+      const [totalRes, awaitingRes, completedRecentRes] = await Promise.all([
+        supabase
+          .from('client_questionnaires')
+          .select('*', { count: 'exact', head: true })
+          .eq('lawyer_id', user.id),
+        supabase
+          .from('client_questionnaires')
+          .select('*', { count: 'exact', head: true })
+          .eq('lawyer_id', user.id)
+          .in('status', ['pending', 'in_progress']),
+        supabase
+          .from('client_questionnaires')
+          .select('total_questions')
+          .eq('lawyer_id', user.id)
+          .eq('status', 'completed')
+          .gte('updated_at', cutoffIso),
+      ]);
+
+      if (totalRes.error) {
+        console.error('Error fetching discovery request total:', totalRes.error);
+      }
+      if (awaitingRes.error) {
+        console.error('Error fetching awaiting discovery count:', awaitingRes.error);
+      }
+      if (completedRecentRes.error) {
+        console.error('Error fetching completed questionnaires for time saved:', completedRecentRes.error);
+      }
+
+      const totalRequests = totalRes.error ? 0 : totalRes.count ?? 0;
+      const awaitingResponse = awaitingRes.error ? 0 : awaitingRes.count ?? 0;
+
+      const questionSum =
+        completedRecentRes.error || !completedRecentRes.data
+          ? 0
+          : completedRecentRes.data.reduce(
+              (acc, row) => acc + (typeof row.total_questions === 'number' ? row.total_questions : 0),
+              0
+            );
+
+      const timeSavedMinutes = questionSum * MINUTES_SAVED_PER_DISCOVERY_QUESTION;
+      const timeSavedHoursRounded = Math.round(timeSavedMinutes / 60);
+
+      return {
+        totalRequests,
+        awaitingResponse,
+        timeSavedHoursRounded,
+      };
     },
-    enabled: !!user
+    enabled: !!user,
+    refetchInterval: 10000,
   });
+
+  const discoveryRequestsCount = discoveryMetrics?.totalRequests ?? 0;
+  const awaitingDiscoveryCount = discoveryMetrics?.awaitingResponse ?? 0;
+  const timeSavedHours = discoveryMetrics?.timeSavedHoursRounded ?? 0;
 
   // Fetch cases with pending client responses
   const { data: casesWithPendingResponses = [] } = useQuery({
@@ -154,11 +215,20 @@ const DashboardPage = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">{discoveryRequestsCount}</div>
+                <div className="text-3xl font-bold">
+                  {loadingDiscoveryMetrics ? (
+                    <span className="text-gray-400">...</span>
+                  ) : (
+                    discoveryRequestsCount
+                  )}
+                </div>
                 <FileText className="h-6 w-6 text-doculaw-500" />
               </div>
               <div className="mt-2 text-xs text-gray-500">
-                <span className="text-amber-500 font-medium">3</span> awaiting response
+                <span className="text-amber-500 font-medium">
+                  {loadingDiscoveryMetrics ? '…' : awaitingDiscoveryCount}
+                </span>{' '}
+                awaiting response
               </div>
             </CardContent>
           </Card>
@@ -190,11 +260,17 @@ const DashboardPage = () => {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">43h</div>
+                <div className="text-3xl font-bold">
+                  {loadingDiscoveryMetrics ? (
+                    <span className="text-gray-400">...</span>
+                  ) : (
+                    `${timeSavedHours}h`
+                  )}
+                </div>
                 <Clock className="h-6 w-6 text-doculaw-500" />
               </div>
               <div className="mt-2 text-xs text-gray-500">
-                Last 30 days
+                Last 30 days · estimated
               </div>
             </CardContent>
           </Card>

@@ -51,12 +51,14 @@ import {
   Sparkles,
   Save,
   Copy,
+  Bell,
+  ClipboardList,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
 // Imports for fetching case data
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { sendSms, getClientDetails } from "@/integrations/sms/client";
@@ -131,11 +133,28 @@ interface CaseData {
   complaint_data?: Record<string, unknown>; // Using a more specific type than any
 }
 
+/** Questionnaire row from `client_questionnaires` (open requests). */
+type OpenClientQuestionnaire = {
+  id: string;
+  client_id: string;
+  case_id: string;
+  status: "pending" | "in_progress" | "completed";
+  title: string;
+  case_name: string;
+  completed_questions: number;
+  total_questions: number;
+  response_deadline: string | null;
+  questions: Array<{ id: string; question: string; original: string; edited: boolean }>;
+  discovery_type: string | null;
+  created_at: string;
+};
+
 const DiscoveryResponsePage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, profile } = useAuth();
+  const queryClient = useQueryClient();
 
   const [activeStep, setActiveStep] = useState(1);
 
