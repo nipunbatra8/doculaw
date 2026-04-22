@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,11 +30,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -58,8 +53,6 @@ import {
   Copy,
   Bell,
   ClipboardList,
-  Clock,
-  ChevronDown,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -82,6 +75,10 @@ import {
   openaiModel,
 } from "@/integrations/openai/client";
 import { AIEditModal } from "@/components/discovery/AIEditModal";
+import InProgressClientQuestionnairesPanel, {
+  type OpenClientQuestionnaire,
+  inProgressQuestionnairesQueryKey,
+} from "@/components/discovery/InProgressClientQuestionnairesPanel";
 
 // Narrative interface
 interface CaseNarrative {
@@ -140,25 +137,10 @@ interface CaseData {
   complaint_data?: Record<string, unknown>; // Using a more specific type than any
 }
 
-/** Questionnaire row from `client_questionnaires` (open requests). */
-type OpenClientQuestionnaire = {
-  id: string;
-  client_id: string;
-  case_id: string;
-  status: "pending" | "in_progress" | "completed";
-  title: string;
-  case_name: string;
-  completed_questions: number;
-  total_questions: number;
-  response_deadline: string | null;
-  questions: Array<{ id: string; question: string; original: string; edited: boolean }>;
-  discovery_type: string | null;
-  created_at: string;
-};
-
 const DiscoveryResponsePage = () => {
   const { caseId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
@@ -221,6 +203,7 @@ const DiscoveryResponsePage = () => {
   /** When set, this questionnaire drives steps 4–5; when null, the query picks the best open (or past) request for the selected client. */
   const [activeQuestionnaireId, setActiveQuestionnaireId] = useState<string | null>(null);
   const [reminderSendingId, setReminderSendingId] = useState<string | null>(null);
+  const appliedQuestionnaireIdFromUrl = useRef(false);
   const [editedQuestions, setEditedQuestions] = useState<Array<{
     id: string;
     question: string;
@@ -469,29 +452,6 @@ const DiscoveryResponsePage = () => {
     fetchCaseClientDetails();
   }, [fetchCaseClientDetails]);
 
-  // All open (pending / in progress) client questionnaires for this case — for the dashboard banner and focus selection
-  const { data: inProgressCaseQuestionnaires = [] } = useQuery<OpenClientQuestionnaire[]>({
-    queryKey: ['inProgressClientQuestionnaires', caseId, user?.id],
-    queryFn: async () => {
-      if (!user || !caseId) return [];
-      const { data, error } = await supabase
-        .from('client_questionnaires')
-        .select('*')
-        .eq('case_id', caseId)
-        .eq('lawyer_id', user.id)
-        .in('status', ['pending', 'in_progress'])
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching in-progress questionnaires:', error);
-        return [];
-      }
-      return (data || []) as OpenClientQuestionnaire[];
-    },
-    enabled: !!user && !!caseId,
-    refetchInterval: 5000,
-  });
-
   // Fetch client questionnaire and responses
   const { data: activeQuestionnaire, refetch: refetchQuestionnaire } = useQuery({
     queryKey: ['clientQuestionnaire', caseId, selectedClient, activeQuestionnaireId, activeStep],
@@ -543,9 +503,33 @@ const DiscoveryResponsePage = () => {
     refetchInterval: 5000, // Poll every 5 seconds for updates
   });
 
+  useEffect(() => {
+    appliedQuestionnaireIdFromUrl.current = false;
+  }, [caseId]);
+
+  useEffect(() => {
+    if (appliedQuestionnaireIdFromUrl.current) return;
+    const q = searchParams.get("q");
+    if (!q || !caseId) return;
+    appliedQuestionnaireIdFromUrl.current = true;
+    setActiveQuestionnaireId(q);
+    setActiveStep(5);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("q");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [caseId, searchParams, setSearchParams]);
+
   // Update state when questionnaire status changes
   useEffect(() => {
     if (activeQuestionnaire) {
+      if (activeQuestionnaireId && activeQuestionnaire.id === activeQuestionnaireId) {
+        setSelectedClient(activeQuestionnaire.client_id);
+      }
       // Load the questions from the questionnaire into editedQuestions
       if (activeQuestionnaire.questions && activeQuestionnaire.questions.length > 0) {
         setEditedQuestions(activeQuestionnaire.questions);
@@ -575,7 +559,7 @@ const DiscoveryResponsePage = () => {
         fetchResponses();
       }
     }
-  }, [activeQuestionnaire]);
+  }, [activeQuestionnaire, activeQuestionnaireId]);
 
   // Load saved data on page load
   useEffect(() => {
@@ -1737,7 +1721,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
 
       // Refetch the questionnaire
       await refetchQuestionnaire();
-      await queryClient.invalidateQueries({ queryKey: ['inProgressClientQuestionnaires', caseId, user.id] });
+      await queryClient.invalidateQueries({ queryKey: inProgressQuestionnairesQueryKey(caseId, user.id) });
       setActiveStep(5);
     } catch (error) {
       console.error("Error updating questions:", error);
@@ -1807,7 +1791,7 @@ Return ONLY the modified objection text, no preamble or explanation.`;
       if (error) throw error;
 
       setActiveQuestionnaireId(questionnaire.id);
-      await queryClient.invalidateQueries({ queryKey: ['inProgressClientQuestionnaires', caseId, user.id] });
+      await queryClient.invalidateQueries({ queryKey: inProgressQuestionnairesQueryKey(caseId, user.id) });
 
       // Create empty response records for each question
       const responseRecords = editedQuestions.map(q => ({
@@ -1986,140 +1970,22 @@ Return ONLY the modified objection text, no preamble or explanation.`;
           </div>
         </div>
 
-        {inProgressCaseQuestionnaires.length > 0 && (
-          <Card className="border-amber-200/80 bg-amber-50/40">
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between gap-3 flex-col sm:flex-row sm:items-center">
-                <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-amber-700" />
-                    In progress client requests
-                  </CardTitle>
-                  <CardDescription className="mt-1">
-                    Open questionnaires for this case. View questions, send SMS reminders, or start another request.
-                  </CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 border-doculaw-200"
-                  onClick={() => {
-                    setActiveQuestionnaireId(null);
-                    setActiveStep(1);
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Add another request
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {inProgressCaseQuestionnaires.map((q) => {
-                const displayName =
-                  caseClientDetails?.find((c) => c.id === q.client_id)?.fullName ||
-                  `Client ${q.client_id.slice(0, 8)}…`;
-                const isFocused = activeQuestionnaireId === q.id;
-                return (
-                  <div
-                    key={q.id}
-                    className={`rounded-lg border p-4 ${
-                      isFocused ? "border-doculaw-400 bg-doculaw-50/50" : "border-gray-200 bg-white"
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 truncate" title={q.title}>
-                          {q.title}
-                        </p>
-                        <p className="text-sm text-gray-600 mt-0.5">
-                          {displayName}
-                          {q.discovery_type ? ` · ${q.discovery_type}` : null}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                          <Badge
-                            variant="outline"
-                            className={
-                              q.status === "in_progress"
-                                ? "bg-blue-50 text-blue-800 border-blue-200"
-                                : "bg-amber-50 text-amber-800 border-amber-200"
-                            }
-                          >
-                            {q.status === "in_progress" ? "In progress" : "Pending"}
-                          </Badge>
-                          <span className="text-xs text-gray-500">
-                            {q.completed_questions} of {q.total_questions} answered
-                            {q.response_deadline
-                              ? ` · Due ${new Date(q.response_deadline).toLocaleDateString()}`
-                              : ""}
-                          </span>
-                        </div>
-                        <Progress
-                          value={q.total_questions > 0 ? (q.completed_questions / q.total_questions) * 100 : 0}
-                          className="h-1.5 mt-3"
-                        />
-                      </div>
-                      <div className="flex flex-col sm:items-end gap-2 shrink-0">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              setActiveQuestionnaireId(q.id);
-                              setSelectedClient(q.client_id);
-                              setActiveStep(5);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                          >
-                            View in workflow
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={reminderSendingId === q.id}
-                            onClick={() => {
-                              void sendQuestionnaireReminder(q);
-                            }}
-                          >
-                            {reminderSendingId === q.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Bell className="h-4 w-4 mr-1" />
-                            )}
-                            Remind
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {q.questions && q.questions.length > 0 && (
-                      <Collapsible className="mt-4">
-                        <CollapsibleTrigger asChild>
-                          <button
-                            type="button"
-                            className="flex items-center gap-1 text-sm text-doculaw-700 hover:underline w-full"
-                          >
-                            <ChevronDown className="h-4 w-4" />
-                            Show questions sent to the client ({q.questions.length})
-                          </button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="pt-3">
-                          <ol className="list-decimal list-inside space-y-2 text-sm text-gray-800 max-h-56 overflow-y-auto pl-1 border-t pt-3">
-                            {q.questions.map((item) => (
-                              <li key={item.id} className="pl-1">
-                                <span className="text-gray-700">{item.question}</span>
-                              </li>
-                            ))}
-                          </ol>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    )}
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        )}
+        <InProgressClientQuestionnairesPanel
+          caseId={caseId!}
+          activeQuestionnaireId={activeQuestionnaireId}
+          onViewInWorkflow={(q) => {
+            setActiveQuestionnaireId(q.id);
+            setSelectedClient(q.client_id);
+            setActiveStep(5);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          showAddAnotherButton
+          onAddAnother={() => {
+            setActiveQuestionnaireId(null);
+            setActiveStep(1);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
 
         <div className="grid gap-6 md:grid-cols-3">
           <div className="md:col-span-2 space-y-6">

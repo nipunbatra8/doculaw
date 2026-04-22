@@ -27,6 +27,7 @@ import ExtractedDataDialog from "@/components/discovery/ExtractedDataDialog";
 import DocumentViewerDialog from "@/components/discovery/DocumentViewerDialog";
 import DocumentViewer from "@/components/discovery/DocumentViewer";
 import RFAPdfPreviewButton from "@/components/discovery/RFAPdfPreviewButton";
+import InProgressClientQuestionnairesPanel from "@/components/discovery/InProgressClientQuestionnairesPanel";
 
 // Types
 import { CaseData, Document, DiscoveryType, STEPS } from "@/components/discovery/types";
@@ -523,6 +524,8 @@ const DiscoveryRequestPage = () => {
             </Link>
           </p>
         </div>
+
+        {caseId && <InProgressClientQuestionnairesPanel caseId={caseId} />}
 
         <Separator />
 
