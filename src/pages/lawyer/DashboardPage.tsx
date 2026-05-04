@@ -254,6 +254,7 @@ const DashboardPage = () => {
             </CardContent>
           </Card>
           
+          {/*
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-500">Time Saved</CardTitle>
@@ -274,6 +275,7 @@ const DashboardPage = () => {
               </div>
             </CardContent>
           </Card>
+          */}
         </div>
 
         {/* Cases with Pending Client Responses */}

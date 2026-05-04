@@ -62,12 +62,14 @@ import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
-const teamMembers = [
-  { id: "1", name: "John Doe", email: "john.doe@example.com", role: "Admin", status: "Active", joinedDate: "Jan 2023" },
-  { id: "2", name: "Jane Smith", email: "jane.smith@example.com", role: "Attorney", status: "Active", joinedDate: "Mar 2023" },
-  { id: "3", name: "Robert Johnson", email: "robert.j@example.com", role: "Paralegal", status: "Active", joinedDate: "Apr 2023" },
-  { id: "4", name: "Sarah Williams", email: "s.williams@example.com", role: "Attorney", status: "Pending", joinedDate: "Invited" },
-];
+const teamMembers: {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  joinedDate: string;
+}[] = [];
 
 const billingHistory = [
   { id: "1", date: "Aug 1, 2023", amount: "$299.00", status: "Paid", plan: "Professional" },
@@ -89,11 +91,7 @@ const SettingsPage = () => {
   });
   
   const [notifications, setNotifications] = useState({
-    emailDigest: true,
-    caseUpdates: true,
-    clientActivity: true,
-    teamChanges: false,
-    marketing: false,
+    allNotifications: true,
   });
 
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
@@ -356,63 +354,71 @@ const SettingsPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {teamMembers.map((member) => (
-                        <TableRow key={member.id}>
-                          <TableCell>
-                            <div className="flex items-center">
-                              <Avatar className="h-8 w-8 mr-3">
-                                <AvatarFallback className="bg-doculaw-200 text-doculaw-700">
-                                  {member.name.charAt(0)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="font-medium">{member.name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">{member.email}</TableCell>
-                          <TableCell>{member.role}</TableCell>
-                          <TableCell className="hidden md:table-cell">{member.joinedDate}</TableCell>
-                          <TableCell>
-                            <Badge variant={member.status === "Active" ? "default" : "secondary"}>
-                              {member.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel>Member Actions</DropdownMenuLabel>
-                                <DropdownMenuItem>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem>
-                                  <Key className="h-4 w-4 mr-2" />
-                                  Change Role
-                                </DropdownMenuItem>
-                                <DropdownMenuItem>
-                                  <Mail className="h-4 w-4 mr-2" />
-                                  Resend Invitation
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  className="text-red-600"
-                                  onClick={() => {
-                                    setSelectedMember(member);
-                                    setDeleteDialogOpen(true);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Remove Member
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                      {teamMembers.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-sm text-gray-500 py-6">
+                            No team members yet.
                           </TableCell>
                         </TableRow>
-                      ))}
+                      ) : (
+                        teamMembers.map((member) => (
+                          <TableRow key={member.id}>
+                            <TableCell>
+                              <div className="flex items-center">
+                                <Avatar className="h-8 w-8 mr-3">
+                                  <AvatarFallback className="bg-doculaw-200 text-doculaw-700">
+                                    {member.name.charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="font-medium">{member.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">{member.email}</TableCell>
+                            <TableCell>{member.role}</TableCell>
+                            <TableCell className="hidden md:table-cell">{member.joinedDate}</TableCell>
+                            <TableCell>
+                              <Badge variant={member.status === "Active" ? "default" : "secondary"}>
+                                {member.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  <DropdownMenuLabel>Member Actions</DropdownMenuLabel>
+                                  <DropdownMenuItem>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem>
+                                    <Key className="h-4 w-4 mr-2" />
+                                    Change Role
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem>
+                                    <Mail className="h-4 w-4 mr-2" />
+                                    Resend Invitation
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    className="text-red-600"
+                                    onClick={() => {
+                                      setSelectedMember(member);
+                                      setDeleteDialogOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Remove Member
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -421,6 +427,7 @@ const SettingsPage = () => {
 
             {/* Billing Tab */}
             <TabsContent value="billing">
+              {/*
               <div className="grid gap-6 md:grid-cols-2">
                 <Card>
                   <CardHeader>
@@ -545,6 +552,18 @@ const SettingsPage = () => {
                   </CardContent>
                 </Card>
               </div>
+              */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <CreditCard className="h-5 w-5 mr-2 text-doculaw-500" />
+                    Billing
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-lg font-semibold">Free Plan</p>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Notifications Tab */}
@@ -560,82 +579,18 @@ const SettingsPage = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <h3 className="font-medium text-lg">Email Notifications</h3>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="email-digest">Daily Email Digest</Label>
-                        <p className="text-sm text-gray-500">
-                          Receive a daily summary of activity
-                        </p>
-                      </div>
-                      <Switch 
-                        id="email-digest" 
-                        checked={notifications.emailDigest}
-                        onCheckedChange={(checked) => handleNotificationChange('emailDigest', checked)}
-                      />
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="all-notifications">All Notifications</Label>
+                      <p className="text-sm text-gray-500">
+                        Turn all notification emails and alerts on or off.
+                      </p>
                     </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="case-updates">Case Updates</Label>
-                        <p className="text-sm text-gray-500">
-                          Notifications about case activity and deadlines
-                        </p>
-                      </div>
-                      <Switch 
-                        id="case-updates" 
-                        checked={notifications.caseUpdates}
-                        onCheckedChange={(checked) => handleNotificationChange('caseUpdates', checked)}
-                      />
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="client-activity">Client Activity</Label>
-                        <p className="text-sm text-gray-500">
-                          Alerts when clients respond to questionnaires
-                        </p>
-                      </div>
-                      <Switch 
-                        id="client-activity" 
-                        checked={notifications.clientActivity}
-                        onCheckedChange={(checked) => handleNotificationChange('clientActivity', checked)}
-                      />
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="team-changes">Team Changes</Label>
-                        <p className="text-sm text-gray-500">
-                          Notifications about team member changes
-                        </p>
-                      </div>
-                      <Switch 
-                        id="team-changes" 
-                        checked={notifications.teamChanges}
-                        onCheckedChange={(checked) => handleNotificationChange('teamChanges', checked)}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <h3 className="font-medium text-lg">Marketing Communications</h3>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="marketing">Marketing Emails</Label>
-                        <p className="text-sm text-gray-500">
-                          Receive product updates and promotional offers
-                        </p>
-                      </div>
-                      <Switch 
-                        id="marketing" 
-                        checked={notifications.marketing}
-                        onCheckedChange={(checked) => handleNotificationChange('marketing', checked)}
-                      />
-                    </div>
+                    <Switch
+                      id="all-notifications"
+                      checked={notifications.allNotifications}
+                      onCheckedChange={(checked) => handleNotificationChange('allNotifications', checked)}
+                    />
                   </div>
                 </CardContent>
                 <CardFooter>

@@ -940,33 +940,6 @@ const CasePage = () => {
                 <CardTitle>Discovery Status</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm">Requests Sent</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">
-                      <p className="text-2xl font-bold">3</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm">Responses Due</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">
-                      <p className="text-2xl font-bold">1</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm">Completed</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">
-                      <p className="text-2xl font-bold">2</p>
-                    </CardContent>
-                  </Card>
-                </div>
-
                 <div className="mt-6 space-y-4">
                   <h3 className="font-medium text-gray-800">Discovery Documents</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
